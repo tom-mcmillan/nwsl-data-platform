@@ -1,0 +1,67 @@
+# Cloud Build configuration for NWSL Analytics MCP Server
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/nwsl-analytics-mcp:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/nwsl-analytics-mcp:latest'
+      - '.'
+
+  # Push the Docker image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/nwsl-analytics-mcp:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/nwsl-analytics-mcp:latest'
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'nwsl-analytics-mcp'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/nwsl-analytics-mcp:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'GCP_PROJECT_ID=$PROJECT_ID,BIGQUERY_DATASET_ID=nwsl_analytics,ENVIRONMENT=production'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '2'
+      - '--timeout'
+      - '300'
+      - '--max-instances'
+      - '10'
+      - '--port'
+      - '8080'
+
+# Configure Cloud Build options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+# Build timeout
+timeout: '1200s'
+
+# Substitutions for flexibility
+substitutions:
+  _REGION: 'us-central1'
+  _SERVICE_NAME: 'nwsl-analytics-mcp'
+
+# Images to be pushed to registry
+images:
+  - 'gcr.io/$PROJECT_ID/nwsl-analytics-mcp:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/nwsl-analytics-mcp:latest'

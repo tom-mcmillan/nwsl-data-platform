@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     google_application_credentials: Optional[str] = None
     
     # Data Configuration
-    nwsl_seasons: List[str] = ["2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024"]
+    nwsl_seasons: str = "2016,2017,2018,2019,2020,2021,2022,2023,2024"
     cache_dir: str = "/tmp/nwsl_cache"
     min_minutes_threshold: int = 450
     
@@ -32,11 +32,10 @@ class Settings(BaseSettings):
     debug: bool = False
     environment: str = "development"
     
-    @validator("nwsl_seasons", pre=True)
-    def parse_seasons(cls, v):
-        if isinstance(v, str):
-            return [s.strip() for s in v.split(",")]
-        return v
+    @property
+    def seasons_list(self) -> List[str]:
+        """Convert comma-separated seasons to list"""
+        return [s.strip() for s in self.nwsl_seasons.split(",")]
     
     class Config:
         env_file = ".env"
