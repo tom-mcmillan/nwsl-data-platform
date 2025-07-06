@@ -99,6 +99,33 @@ class NWSLAnalyticsServer:
                         },
                         "required": ["season"]
                     }
+                ),
+                types.Tool(
+                    name="get_raw_data",
+                    description="Get raw statistical data - squad stats, player stats, games data, etc.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "data_type": {
+                                "type": "string",
+                                "description": "Type of data: 'squad_stats', 'player_stats', 'games', 'team_info'",
+                                "enum": ["squad_stats", "player_stats", "games", "team_info"]
+                            },
+                            "season": {
+                                "type": "string",
+                                "description": "Season year (e.g., '2024')"
+                            },
+                            "team_id": {
+                                "type": "string",
+                                "description": "Optional: Filter by specific team"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Optional: Limit number of rows returned (default: 50)"
+                            }
+                        },
+                        "required": ["data_type", "season"]
+                    }
                 )
             ]
 
@@ -114,6 +141,8 @@ class NWSLAnalyticsServer:
                 return await self._get_recent_games(arguments)
             elif name == "get_league_standings":
                 return await self._get_league_standings(arguments)
+            elif name == "get_raw_data":
+                return await self._get_raw_data(arguments)
             else:
                 raise ValueError(f"Unknown tool: {name}")
 
@@ -309,6 +338,147 @@ class NWSLAnalyticsServer:
         """Calculate league standings"""
         # This is similar to team performance but formatted as standings table
         return await self._get_team_performance(args)
+
+    async def _get_raw_data(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """Get raw statistical data"""
+        data_type = args.get("data_type")
+        season = args.get("season")
+        team_id = args.get("team_id")
+        limit = args.get("limit", 50)
+        
+        if not data_type or not season:
+            return [types.TextContent(
+                type="text",
+                text="Error: Both 'data_type' and 'season' parameters are required"
+            )]
+        
+        try:
+            if data_type == "squad_stats":
+                # Aggregate team statistics like goals, assists, possession, etc.
+                query = f"""
+                SELECT 
+                    home_team_id as team_id,
+                    COUNT(*) as matches_played,
+                    SUM(home_score) as goals_for,
+                    SUM(away_score) as goals_against,
+                    SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) as draws,
+                    SUM(CASE WHEN home_score < away_score THEN 1 ELSE 0 END) as losses,
+                    AVG(attendance) as avg_attendance,
+                    (SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END) * 3 + 
+                     SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END)) as points
+                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                {"WHERE home_team_id = '" + team_id + "'" if team_id else ""}
+                GROUP BY home_team_id
+                
+                UNION ALL
+                
+                SELECT 
+                    away_team_id as team_id,
+                    COUNT(*) as matches_played,
+                    SUM(away_score) as goals_for,
+                    SUM(home_score) as goals_against,
+                    SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END) as wins,
+                    SUM(CASE WHEN away_score = home_score THEN 1 ELSE 0 END) as draws,
+                    SUM(CASE WHEN away_score < home_score THEN 1 ELSE 0 END) as losses,
+                    AVG(attendance) as avg_attendance,
+                    (SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END) * 3 + 
+                     SUM(CASE WHEN away_score = home_score THEN 1 ELSE 0 END)) as points
+                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                {"WHERE away_team_id = '" + team_id + "'" if team_id else ""}
+                GROUP BY away_team_id
+                ORDER BY points DESC
+                LIMIT {limit}
+                """
+                
+            elif data_type == "player_stats":
+                # For now, return team-level data since we don't have individual player stats
+                query = f"""
+                SELECT 
+                    home_team_id as team,
+                    game_id,
+                    date_time_utc,
+                    home_score as goals,
+                    away_score as goals_against,
+                    attendance
+                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                {"WHERE home_team_id = '" + team_id + "'" if team_id else ""}
+                ORDER BY date_time_utc DESC
+                LIMIT {limit}
+                """
+                
+            elif data_type == "games":
+                # Raw games data - all match information
+                query = f"""
+                SELECT 
+                    game_id,
+                    date_time_utc,
+                    home_team_id,
+                    away_team_id,
+                    home_score,
+                    away_score,
+                    attendance,
+                    (home_score - away_score) as goal_difference
+                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                {"WHERE home_team_id = '" + team_id + "' OR away_team_id = '" + team_id + "'" if team_id else ""}
+                ORDER BY date_time_utc DESC
+                LIMIT {limit}
+                """
+                
+            elif data_type == "team_info":
+                # Team information from teams table
+                query = f"""
+                SELECT *
+                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_teams_all`
+                {"WHERE team_id = '" + team_id + "'" if team_id else ""}
+                LIMIT {limit}
+                """
+                
+            else:
+                return [types.TextContent(
+                    type="text",
+                    text=f"Error: Unknown data_type '{data_type}'. Available types: squad_stats, player_stats, games, team_info"
+                )]
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            if df.empty:
+                return [types.TextContent(
+                    type="text",
+                    text=f"No {data_type} data found for season {season}"
+                )]
+            
+            # Format the data as CSV-like output for easy analysis
+            result = f"Raw {data_type.replace('_', ' ').title()} Data - NWSL {season}\n"
+            result += "=" * 60 + "\n\n"
+            
+            # Add column headers
+            result += "\t".join(df.columns) + "\n"
+            result += "-" * 60 + "\n"
+            
+            # Add data rows
+            for _, row in df.iterrows():
+                formatted_row = []
+                for col in df.columns:
+                    value = row[col]
+                    if pd.isna(value):
+                        formatted_row.append("NULL")
+                    elif isinstance(value, float):
+                        formatted_row.append(f"{value:.2f}")
+                    else:
+                        formatted_row.append(str(value))
+                result += "\t".join(formatted_row) + "\n"
+            
+            result += f"\nTotal Records: {len(df)}\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            logger.error(f"Error getting raw data: {e}")
+            return [types.TextContent(
+                type="text",
+                text=f"Error retrieving {data_type} data: {str(e)}"
+            )]
 
     async def run(self):
         """Run the MCP server"""

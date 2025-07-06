@@ -144,6 +144,20 @@ async def mcp_endpoint(request: dict):
                         },
                         "required": ["season"]
                     }
+                },
+                {
+                    "name": "get_raw_data",
+                    "description": "Get raw statistical data - squad stats, player stats, games data, etc.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "data_type": {"type": "string", "description": "Type of data: 'squad_stats', 'player_stats', 'games', 'team_info'"},
+                            "season": {"type": "string", "description": "Season year (e.g., '2024')"},
+                            "team_id": {"type": "string", "description": "Optional: Filter by specific team"},
+                            "limit": {"type": "integer", "description": "Optional: Limit number of rows returned (default: 50)"}
+                        },
+                        "required": ["data_type", "season"]
+                    }
                 }
             ]
             
@@ -168,6 +182,8 @@ async def mcp_endpoint(request: dict):
                 result = await mcp_server._get_recent_games(tool_args)
             elif tool_name == "get_league_standings":
                 result = await mcp_server._get_league_standings(tool_args)
+            elif tool_name == "get_raw_data":
+                result = await mcp_server._get_raw_data(tool_args)
             else:
                 return {
                     "jsonrpc": "2.0",
