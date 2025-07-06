@@ -15,6 +15,7 @@ import mcp.server.stdio
 import mcp.types as types
 
 from ..config.settings import settings
+from ..data.ingestion.fbref_client import FBrefAPIClient
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,12 @@ class NWSLAnalyticsServer:
         self.server = Server("nwsl-analytics")
         self.bigquery_client = bigquery.Client(project=settings.gcp_project_id)
         self.dataset_id = settings.bigquery_dataset_id
+        
+        # Initialize FBref API client
+        self.fbref_client = FBrefAPIClient(
+            project_id=settings.gcp_project_id,
+            dataset_id=settings.bigquery_dataset_id
+        )
         
         # Register MCP tools
         self._register_tools()
@@ -108,8 +115,8 @@ class NWSLAnalyticsServer:
                         "properties": {
                             "data_type": {
                                 "type": "string",
-                                "description": "Type of data: 'squad_stats', 'player_stats', 'games', 'team_info'",
-                                "enum": ["squad_stats", "player_stats", "games", "team_info"]
+                                "description": "Type of data: 'squad_stats', 'player_stats', 'games', 'team_info', 'fbref_team_stats', 'fbref_player_stats', 'fbref_matches', 'fbref_player_match_stats'",
+                                "enum": ["squad_stats", "player_stats", "games", "team_info", "fbref_team_stats", "fbref_player_stats", "fbref_matches", "fbref_player_match_stats"]
                             },
                             "season": {
                                 "type": "string",
@@ -435,10 +442,84 @@ class NWSLAnalyticsServer:
                 """
                 
             else:
-                return [types.TextContent(
-                    type="text",
-                    text=f"Error: Unknown data_type '{data_type}'. Available types: squad_stats, player_stats, games, team_info"
-                )]
+                # FBref API data types
+                if data_type == "fbref_team_stats":
+                    # Get professional team statistics from FBRef
+                    if not self.fbref_client.nwsl_league_id:
+                        self.fbref_client.find_nwsl_league_id()
+                    
+                    if not self.fbref_client.nwsl_league_id:
+                        return [types.TextContent(
+                            type="text",
+                            text="Error: Could not find NWSL league in FBRef API"
+                        )]
+                    
+                    df = self.fbref_client.get_team_season_stats(season)
+                    if df.empty:
+                        return [types.TextContent(
+                            type="text",
+                            text=f"No FBRef team stats found for season {season}"
+                        )]
+                    
+                elif data_type == "fbref_player_stats":
+                    # Get professional player statistics from FBRef
+                    if not self.fbref_client.nwsl_league_id:
+                        self.fbref_client.find_nwsl_league_id()
+                    
+                    if not self.fbref_client.nwsl_league_id:
+                        return [types.TextContent(
+                            type="text",
+                            text="Error: Could not find NWSL league in FBRef API"
+                        )]
+                    
+                    df = self.fbref_client.get_player_season_stats(season)
+                    if df.empty:
+                        return [types.TextContent(
+                            type="text",
+                            text=f"No FBRef player stats found for season {season}"
+                        )]
+                    
+                elif data_type == "fbref_matches":
+                    # Get professional match data from FBRef
+                    if not self.fbref_client.nwsl_league_id:
+                        self.fbref_client.find_nwsl_league_id()
+                    
+                    if not self.fbref_client.nwsl_league_id:
+                        return [types.TextContent(
+                            type="text",
+                            text="Error: Could not find NWSL league in FBRef API"
+                        )]
+                    
+                    df = self.fbref_client.get_match_stats(season)
+                    if df.empty:
+                        return [types.TextContent(
+                            type="text",
+                            text=f"No FBRef match data found for season {season}"
+                        )]
+                    
+                elif data_type == "fbref_player_match_stats":
+                    # Get detailed player match statistics from FBRef
+                    if not self.fbref_client.nwsl_league_id:
+                        self.fbref_client.find_nwsl_league_id()
+                    
+                    if not self.fbref_client.nwsl_league_id:
+                        return [types.TextContent(
+                            type="text",
+                            text="Error: Could not find NWSL league in FBRef API"
+                        )]
+                    
+                    df = self.fbref_client.get_player_match_stats(season)
+                    if df.empty:
+                        return [types.TextContent(
+                            type="text",
+                            text=f"No FBRef player match stats found for season {season}"
+                        )]
+                    
+                else:
+                    return [types.TextContent(
+                        type="text",
+                        text=f"Error: Unknown data_type '{data_type}'. Available types: squad_stats, player_stats, games, team_info, fbref_team_stats, fbref_player_stats, fbref_matches, fbref_player_match_stats"
+                    )]
             
             df = self.bigquery_client.query(query).to_dataframe()
             

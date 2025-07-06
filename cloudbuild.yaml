@@ -34,7 +34,7 @@ steps:
       - 'us-central1'
       - '--platform'
       - 'managed'
-      - '--allow-unauthenticated'
+      - '--no-allow-unauthenticated'
       - '--set-env-vars'
       - 'GCP_PROJECT_ID=$PROJECT_ID,BIGQUERY_DATASET_ID=nwsl_analytics,ENVIRONMENT=production'
       - '--memory'

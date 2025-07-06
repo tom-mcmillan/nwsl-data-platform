@@ -14,8 +14,10 @@ pyarrow>=12.0.0
 
 # MCP framework
 mcp>=1.0.0
+soccerdata>=1.8.0
 
 # Additional for containerization
 uvicorn>=0.20.0
 fastapi>=0.100.0
 gunicorn>=21.0.0
+requests>=2.31.0

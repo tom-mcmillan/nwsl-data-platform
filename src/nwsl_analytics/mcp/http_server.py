@@ -59,7 +59,8 @@ async def root():
             "get_team_performance",
             "get_attendance_analysis", 
             "get_recent_games",
-            "get_league_standings"
+            "get_league_standings",
+            "get_raw_data (includes FBRef professional stats)"
         ]
     }
 
@@ -151,7 +152,7 @@ async def mcp_endpoint(request: dict):
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "data_type": {"type": "string", "description": "Type of data: 'squad_stats', 'player_stats', 'games', 'team_info'"},
+                            "data_type": {"type": "string", "description": "Type of data: 'squad_stats', 'player_stats', 'games', 'team_info', 'fbref_team_stats', 'fbref_player_stats', 'fbref_matches', 'fbref_player_match_stats'"},
                             "season": {"type": "string", "description": "Season year (e.g., '2024')"},
                             "team_id": {"type": "string", "description": "Optional: Filter by specific team"},
                             "limit": {"type": "integer", "description": "Optional: Limit number of rows returned (default: 50)"}

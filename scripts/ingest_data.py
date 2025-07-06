@@ -32,10 +32,10 @@ def main():
     
     total_stats = {'tables_created': 0, 'total_rows': 0}
     
-    # Start with recent seasons for testing
-    test_seasons = ['2022', '2023', '2024']
+    # All NWSL seasons from inception to current
+    all_seasons = [str(year) for year in range(2013, 2026)]  # 2013-2025
     
-    for season in test_seasons:
+    for season in all_seasons:
         try:
             logger.info(f"🏃‍♀️ Processing NWSL season {season}...")
             season_stats = client.ingest_season_data(season)
