@@ -72,12 +72,148 @@ async def mcp_endpoint(request: dict):
         raise HTTPException(status_code=503, detail="MCP Server not initialized")
     
     try:
-        # Handle MCP request (simplified for HTTP)
-        # In a real implementation, you'd need to adapt the MCP protocol
-        return {"status": "MCP endpoint - implement protocol adapter"}
+        # Handle MCP JSON-RPC request
+        if "jsonrpc" not in request:
+            request["jsonrpc"] = "2.0"
+        
+        method = request.get("method")
+        params = request.get("params", {})
+        request_id = request.get("id")
+        
+        if method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "serverInfo": {
+                        "name": "nwsl-analytics",
+                        "version": "1.0.0"
+                    },
+                    "capabilities": {
+                        "tools": {}
+                    }
+                }
+            }
+        
+        elif method == "tools/list":
+            # Get tools from MCP server
+            tools = [
+                {
+                    "name": "get_team_performance",
+                    "description": "Get team performance metrics for a specific season",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "season": {"type": "string", "description": "Season year (e.g., '2024')"},
+                            "team_id": {"type": "string", "description": "Team ID (optional)"}
+                        },
+                        "required": ["season"]
+                    }
+                },
+                {
+                    "name": "get_attendance_analysis",
+                    "description": "Analyze attendance patterns across teams and seasons",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "season": {"type": "string", "description": "Season year (e.g., '2024')"}
+                        },
+                        "required": ["season"]
+                    }
+                },
+                {
+                    "name": "get_recent_games",
+                    "description": "Get recent NWSL games with scores and details",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "limit": {"type": "integer", "description": "Number of games to return (default: 10)"},
+                            "season": {"type": "string", "description": "Season year (e.g., '2024')"}
+                        },
+                        "required": ["season"]
+                    }
+                },
+                {
+                    "name": "get_league_standings",
+                    "description": "Calculate league standings for a season",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "season": {"type": "string", "description": "Season year (e.g., '2024')"}
+                        },
+                        "required": ["season"]
+                    }
+                }
+            ]
+            
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "tools": tools
+                }
+            }
+        
+        elif method == "tools/call":
+            tool_name = params.get("name")
+            tool_args = params.get("arguments", {})
+            
+            # Call the appropriate tool method
+            if tool_name == "get_team_performance":
+                result = await mcp_server._get_team_performance(tool_args)
+            elif tool_name == "get_attendance_analysis":
+                result = await mcp_server._get_attendance_analysis(tool_args)
+            elif tool_name == "get_recent_games":
+                result = await mcp_server._get_recent_games(tool_args)
+            elif tool_name == "get_league_standings":
+                result = await mcp_server._get_league_standings(tool_args)
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Unknown tool: {tool_name}"
+                    }
+                }
+            
+            # Convert TextContent to dict format
+            content = []
+            for item in result:
+                content.append({
+                    "type": "text",
+                    "text": item.text
+                })
+            
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "content": content
+                }
+            }
+        
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"Method not found: {method}"
+                }
+            }
+            
     except Exception as e:
         logger.error(f"MCP request error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return {
+            "jsonrpc": "2.0",
+            "id": request.get("id"),
+            "error": {
+                "code": -32603,
+                "message": str(e)
+            }
+        }
 
 def main():
     """Main entry point for Cloud Run"""
