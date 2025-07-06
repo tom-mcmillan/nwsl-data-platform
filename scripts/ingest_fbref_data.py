@@ -29,17 +29,39 @@ def main():
     logger.info(f"📊 Project: {settings.gcp_project_id}")
     logger.info(f"💾 Dataset: {settings.bigquery_dataset_id}")
     
-    # Get FBref API key from environment
+    # Get FBref API key from environment or generate one
     fbref_api_key = os.getenv('FBREF_API_KEY')
     
     if not fbref_api_key:
-        logger.error("❌ FBREF_API_KEY not found in environment variables!")
-        logger.info("📝 To get an API key:")
-        logger.info("   1. Visit https://fbrapi.com")
-        logger.info("   2. Sign up for an account")
-        logger.info("   3. Get your API key")
-        logger.info("   4. Set environment variable: export FBREF_API_KEY='your-key-here'")
-        return
+        logger.info("🔑 No API key found, generating new FBR API key...")
+        try:
+            import requests
+            response = requests.post('https://fbrapi.com/generate_api_key')
+            response.raise_for_status()
+            
+            api_key_data = response.json()
+            fbref_api_key = api_key_data.get('api_key')
+            
+            if fbref_api_key:
+                logger.info(f"✅ Generated new API key: {fbref_api_key}")
+                logger.info("💡 Save this key for future use:")
+                logger.info(f"   export FBREF_API_KEY='{fbref_api_key}'")
+                
+                # Save to .env file for convenience
+                env_file = Path(__file__).parent.parent / ".env"
+                with open(env_file, 'a') as f:
+                    f.write(f"\n# FBR API Key (auto-generated)\n")
+                    f.write(f"FBREF_API_KEY={fbref_api_key}\n")
+                logger.info(f"   Saved to {env_file}")
+            else:
+                logger.error("❌ Failed to generate API key - no key in response")
+                return
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to generate FBR API key: {e}")
+            logger.info("💡 You can manually generate one:")
+            logger.info("   curl -X POST https://fbrapi.com/generate_api_key")
+            return
     
     # Create FBref client
     client = FBrefAPIClient(
@@ -76,40 +98,39 @@ def main():
     
     # Show seasons
     for i, season in enumerate(seasons):
-        logger.info(f"   {i+1}. {season.get('name', 'Unknown')} (ID: {season.get('id')})")
+        logger.info(f"   {i+1}. {season.get('season_id', 'Unknown')} - {season.get('competition_name', 'Unknown')} (Champion: {season.get('champion', 'TBD')})")
     
     total_stats = {'tables_created': 0, 'total_rows': 0, 'seasons_processed': 0}
     
     # Process each season
     for i, season_data in enumerate(seasons):
-        season_id = season_data.get('id')
-        season_name = season_data.get('name', 'Unknown')
+        season_id = season_data.get('season_id')
+        season_name = f"{season_data.get('season_id')} {season_data.get('competition_name', 'NWSL')}"
         
         # Filter for NWSL seasons 2013-2025
         try:
-            # Extract year from season name (could be "2024" or "2024 NWSL" etc)
-            season_year = None
-            for part in season_name.split():
-                if part.isdigit() and len(part) == 4:
-                    season_year = int(part)
-                    break
-            
-            if not season_year or season_year < 2013 or season_year > 2025:
-                logger.info(f"⏭️ Skipping season {season_name} (outside 2013-2025 range)")
+            # Extract year from season_id (should be like "2024")
+            if season_id and season_id.isdigit():
+                season_year = int(season_id)
+                if season_year < 2013 or season_year > 2025:
+                    logger.info(f"⏭️ Skipping season {season_name} (outside 2013-2025 range)")
+                    continue
+            else:
+                logger.warning(f"⚠️ Could not parse year from season_id: {season_id}")
                 continue
         except:
-            logger.warning(f"⚠️ Could not parse year from season name: {season_name}")
-            pass
+            logger.warning(f"⚠️ Could not parse year from season_id: {season_id}")
+            continue
         
         logger.info(f"\n{'='*60}")
         logger.info(f"📅 Processing season {i+1}/{len(seasons)}: {season_name}")
         logger.info(f"{'='*60}")
         
         try:
-            # Add delay to respect rate limits (adjust based on your API tier)
+            # Add delay to respect rate limits (FBref requires 6 seconds between requests)
             if i > 0:
-                logger.info("⏳ Waiting 3 seconds for rate limit...")
-                time.sleep(3)
+                logger.info("⏳ Waiting 6 seconds for FBref rate limit...")
+                time.sleep(6)
             
             # Ingest season data
             season_stats = client.ingest_season_data(season_id)

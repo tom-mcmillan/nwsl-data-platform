@@ -21,21 +21,35 @@ class FBrefAPIClient:
         self.api_key = api_key
         self.base_url = "https://fbrapi.com"
         self.client = bigquery.Client(project=project_id)
+        self.last_request_time = 0
+        self.rate_limit_seconds = 6  # FBref requires 6 seconds between requests
         
         # Headers for API requests
         self.headers = {
-            "Authorization": f"Bearer {api_key}" if api_key else None,
+            "X-API-Key": api_key if api_key else None,
             "Content-Type": "application/json",
             "User-Agent": "NWSL-Analytics/1.0"
         }
         
-        # Remove Authorization header if no API key provided
+        # Remove X-API-Key header if no API key provided
         if not api_key:
-            self.headers.pop("Authorization", None)
+            self.headers.pop("X-API-Key", None)
         
         # NWSL league configuration (will be populated after finding league_id)
         self.nwsl_league_id = None
         self.nwsl_country_id = None
+    
+    def _enforce_rate_limit(self):
+        """Enforce FBref's 6 second rate limit between requests"""
+        current_time = time.time()
+        time_since_last_request = current_time - self.last_request_time
+        
+        if time_since_last_request < self.rate_limit_seconds:
+            wait_time = self.rate_limit_seconds - time_since_last_request
+            logger.info(f"⏳ Rate limit: waiting {wait_time:.1f} seconds...")
+            time.sleep(wait_time)
+        
+        self.last_request_time = time.time()
     
     def find_nwsl_league_id(self) -> Optional[str]:
         """Find NWSL league ID using the FBR API"""
@@ -44,40 +58,47 @@ class FBrefAPIClient:
             countries_url = f"{self.base_url}/countries"
             logger.info(f"Fetching countries from: {countries_url}")
             
+            self._enforce_rate_limit()
             response = requests.get(countries_url, headers=self.headers)
             response.raise_for_status()
             
-            countries = response.json()
+            response_data = response.json()
+            countries = response_data.get("data", [])
             
             # Find USA
-            usa_id = None
+            usa_country_code = None
             for country in countries:
-                if country.get("name", "").lower() in ["usa", "united states", "united states of america"]:
-                    usa_id = country.get("id")
-                    self.nwsl_country_id = usa_id
-                    logger.info(f"Found USA country ID: {usa_id}")
+                if country.get("country", "").lower() in ["usa", "united states", "united states of america"]:
+                    usa_country_code = country.get("country_code")
+                    self.nwsl_country_id = usa_country_code
+                    logger.info(f"Found USA country code: {usa_country_code}")
                     break
             
-            if not usa_id:
-                logger.error("Could not find USA country ID")
+            if not usa_country_code:
+                logger.error("Could not find USA country code")
                 return None
             
             # Now get leagues for USA
             leagues_url = f"{self.base_url}/leagues"
             logger.info(f"Fetching leagues from: {leagues_url}")
             
-            response = requests.get(leagues_url, headers=self.headers, params={"country_id": usa_id})
+            self._enforce_rate_limit()
+            response = requests.get(leagues_url, headers=self.headers, params={"country_code": usa_country_code})
             response.raise_for_status()
             
-            leagues = response.json()
+            response_data = response.json()
+            league_data = response_data.get("data", [])
             
-            # Find NWSL
-            for league in leagues:
-                league_name = league.get("name", "").lower()
-                if "nwsl" in league_name or "national women's soccer league" in league_name:
-                    self.nwsl_league_id = league.get("id")
-                    logger.info(f"Found NWSL league ID: {self.nwsl_league_id}")
-                    return self.nwsl_league_id
+            # Find NWSL in domestic leagues
+            for league_type_data in league_data:
+                if league_type_data.get("league_type") == "domestic_leagues":
+                    leagues = league_type_data.get("leagues", [])
+                    for league in leagues:
+                        league_name = league.get("competition_name", "").lower()
+                        if "nwsl" in league_name or "national women's soccer league" in league_name:
+                            self.nwsl_league_id = league.get("league_id")
+                            logger.info(f"Found NWSL league ID: {self.nwsl_league_id}")
+                            return self.nwsl_league_id
             
             logger.error("Could not find NWSL league ID")
             return None
@@ -96,13 +117,15 @@ class FBrefAPIClient:
             return []
         
         try:
-            url = f"{self.base_url}/seasons"
+            url = f"{self.base_url}/league-seasons"
             params = {"league_id": self.nwsl_league_id}
             
+            self._enforce_rate_limit()
             response = requests.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             
-            seasons = response.json()
+            response_data = response.json()
+            seasons = response_data.get("data", [])
             logger.info(f"Found {len(seasons)} NWSL seasons")
             return seasons
             
@@ -116,16 +139,18 @@ class FBrefAPIClient:
             self.find_nwsl_league_id()
         
         try:
-            url = f"{self.base_url}/teams/season-stats"
+            url = f"{self.base_url}/team-season-stats"
             params = {
                 "league_id": self.nwsl_league_id,
                 "season_id": season_id
             }
             
+            self._enforce_rate_limit()
             response = requests.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             
-            data = response.json()
+            response_data = response.json()
+            data = response_data.get("data", [])
             
             if not data:
                 logger.warning(f"No team season stats for season {season_id}")
@@ -147,16 +172,18 @@ class FBrefAPIClient:
             self.find_nwsl_league_id()
         
         try:
-            url = f"{self.base_url}/players/season-stats"
+            url = f"{self.base_url}/player-season-stats"
             params = {
                 "league_id": self.nwsl_league_id,
                 "season_id": season_id
             }
             
+            self._enforce_rate_limit()
             response = requests.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             
-            data = response.json()
+            response_data = response.json()
+            data = response_data.get("data", [])
             
             if not data:
                 logger.warning(f"No player season stats for season {season_id}")
@@ -184,10 +211,12 @@ class FBrefAPIClient:
                 "season_id": season_id
             }
             
+            self._enforce_rate_limit()
             response = requests.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             
-            data = response.json()
+            response_data = response.json()
+            data = response_data.get("data", [])
             
             if not data:
                 logger.warning(f"No match data for season {season_id}")
@@ -203,25 +232,27 @@ class FBrefAPIClient:
             logger.error(f"Error fetching match data: {e}")
             return pd.DataFrame()
     
-    def get_player_match_stats(self, season_id: str) -> pd.DataFrame:
-        """Get detailed player match statistics"""
+    def get_all_players_match_stats(self, season_id: str) -> pd.DataFrame:
+        """Get detailed player match statistics for all players"""
         if not self.nwsl_league_id:
             self.find_nwsl_league_id()
         
         try:
-            url = f"{self.base_url}/players/match-stats"
+            url = f"{self.base_url}/all-players-match-stats"
             params = {
                 "league_id": self.nwsl_league_id,
                 "season_id": season_id
             }
             
+            self._enforce_rate_limit()
             response = requests.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             
-            data = response.json()
+            response_data = response.json()
+            data = response_data.get("data", [])
             
             if not data:
-                logger.warning(f"No player match stats for season {season_id}")
+                logger.warning(f"No all-players match stats for season {season_id}")
                 return pd.DataFrame()
             
             df = pd.DataFrame(data)
@@ -231,7 +262,7 @@ class FBrefAPIClient:
             return df
             
         except Exception as e:
-            logger.error(f"Error fetching player match stats: {e}")
+            logger.error(f"Error fetching all-players match stats: {e}")
             return pd.DataFrame()
     
     def ingest_season_data(self, season_id: str) -> Dict[str, int]:
@@ -268,14 +299,14 @@ class FBrefAPIClient:
                     results['tables_created'] += 1
                     logger.info(f"✅ Match data: {rows} rows")
             
-            # Get player match stats
-            player_match_stats = self.get_player_match_stats(season_id)
-            if not player_match_stats.empty:
-                rows = self._upload_to_bigquery(player_match_stats, f'nwsl_player_match_stats_{season_id}')
+            # Get all players match stats
+            all_player_match_stats = self.get_all_players_match_stats(season_id)
+            if not all_player_match_stats.empty:
+                rows = self._upload_to_bigquery(all_player_match_stats, f'nwsl_all_players_match_stats_{season_id}')
                 if rows > 0:
                     results['total_rows'] += rows
                     results['tables_created'] += 1
-                    logger.info(f"✅ Player match stats: {rows} rows")
+                    logger.info(f"✅ All players match stats: {rows} rows")
             
         except Exception as e:
             logger.error(f"Error ingesting season {season_id}: {e}")
@@ -326,6 +357,7 @@ class FBrefAPIClient:
         """Test connection to FBR API"""
         try:
             url = f"{self.base_url}/countries"
+            self._enforce_rate_limit()
             response = requests.get(url, headers=self.headers)
             
             if response.status_code == 401:
