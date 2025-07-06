@@ -119,7 +119,12 @@ class NWSLAnalyticsServer:
 
     async def _get_team_performance(self, args: Dict[str, Any]) -> List[types.TextContent]:
         """Get team performance metrics"""
-        season = args["season"]
+        season = args.get("season")
+        if not season:
+            return [types.TextContent(
+                type="text",
+                text="Error: 'season' parameter is required (e.g., '2024')"
+            )]
         team_id = args.get("team_id")
         
         try:
@@ -200,7 +205,12 @@ class NWSLAnalyticsServer:
 
     async def _get_attendance_analysis(self, args: Dict[str, Any]) -> List[types.TextContent]:
         """Analyze attendance patterns"""
-        season = args["season"]
+        season = args.get("season")
+        if not season:
+            return [types.TextContent(
+                type="text",
+                text="Error: 'season' parameter is required (e.g., '2024')"
+            )]
         
         try:
             query = f"""
@@ -246,7 +256,12 @@ class NWSLAnalyticsServer:
 
     async def _get_recent_games(self, args: Dict[str, Any]) -> List[types.TextContent]:
         """Get recent games"""
-        season = args["season"]
+        season = args.get("season")
+        if not season:
+            return [types.TextContent(
+                type="text",
+                text="Error: 'season' parameter is required (e.g., '2024')"
+            )]
         limit = args.get("limit", 10)
         
         try:
@@ -275,7 +290,7 @@ class NWSLAnalyticsServer:
             result = f"Recent NWSL {season} Games:\n\n"
             
             for _, game in df.iterrows():
-                date = game['date_time_utc'].strftime('%Y-%m-%d')
+                date = pd.to_datetime(game['date_time_utc']).strftime('%Y-%m-%d')
                 result += f"🗓️ {date}: {game['home_team_id']} {game['home_score']}-{game['away_score']} {game['away_team_id']}"
                 if pd.notna(game['attendance']):
                     result += f" (👥 {int(game['attendance']):,})"
