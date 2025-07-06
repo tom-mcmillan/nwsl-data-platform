@@ -36,7 +36,7 @@ steps:
       - 'managed'
       - '--no-allow-unauthenticated'
       - '--set-env-vars'
-      - 'GCP_PROJECT_ID=$PROJECT_ID,BIGQUERY_DATASET_ID=nwsl_analytics,ENVIRONMENT=production'
+      - 'GCP_PROJECT_ID=$PROJECT_ID,BIGQUERY_DATASET_ID=nwsl_fbref,ENVIRONMENT=production'
       - '--memory'
       - '2Gi'
       - '--cpu'

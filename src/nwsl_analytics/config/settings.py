@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # Google Cloud Configuration
     gcp_project_id: str
-    bigquery_dataset_id: str = "nwsl_analytics"
+    bigquery_dataset_id: str = "nwsl_fbref"
     google_application_credentials: Optional[str] = None
     
     # Data Configuration

@@ -15,7 +15,6 @@ import mcp.server.stdio
 import mcp.types as types
 
 from ..config.settings import settings
-from ..data.ingestion.fbref_client import FBrefAPIClient
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +25,6 @@ class NWSLAnalyticsServer:
         self.server = Server("nwsl-analytics")
         self.bigquery_client = bigquery.Client(project=settings.gcp_project_id)
         self.dataset_id = settings.bigquery_dataset_id
-        
-        # Initialize FBref API client
-        self.fbref_client = FBrefAPIClient(
-            project_id=settings.gcp_project_id,
-            dataset_id=settings.bigquery_dataset_id
-        )
         
         # Register MCP tools
         self._register_tools()
@@ -442,78 +435,46 @@ class NWSLAnalyticsServer:
                 """
                 
             else:
-                # FBref API data types
+                # FBref data types (from BigQuery)
                 if data_type == "fbref_team_stats":
-                    # Get professional team statistics from FBRef
-                    if not self.fbref_client.nwsl_league_id:
-                        self.fbref_client.find_nwsl_league_id()
-                    
-                    if not self.fbref_client.nwsl_league_id:
-                        return [types.TextContent(
-                            type="text",
-                            text="Error: Could not find NWSL league in FBRef API"
-                        )]
-                    
-                    df = self.fbref_client.get_team_season_stats(season)
-                    if df.empty:
-                        return [types.TextContent(
-                            type="text",
-                            text=f"No FBRef team stats found for season {season}"
-                        )]
+                    # Get professional team statistics from BigQuery
+                    query = f"""
+                    SELECT *
+                    FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_team_season_stats_{season}`
+                    {f"WHERE team_id = '{team_id}'" if team_id else ""}
+                    ORDER BY points DESC, goal_difference DESC
+                    LIMIT {limit}
+                    """
                     
                 elif data_type == "fbref_player_stats":
-                    # Get professional player statistics from FBRef
-                    if not self.fbref_client.nwsl_league_id:
-                        self.fbref_client.find_nwsl_league_id()
-                    
-                    if not self.fbref_client.nwsl_league_id:
-                        return [types.TextContent(
-                            type="text",
-                            text="Error: Could not find NWSL league in FBRef API"
-                        )]
-                    
-                    df = self.fbref_client.get_player_season_stats(season)
-                    if df.empty:
-                        return [types.TextContent(
-                            type="text",
-                            text=f"No FBRef player stats found for season {season}"
-                        )]
+                    # Get professional player statistics from BigQuery
+                    query = f"""
+                    SELECT *
+                    FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_player_season_stats_{season}`
+                    {f"WHERE team_id = '{team_id}'" if team_id else ""}
+                    ORDER BY xg DESC, goals DESC
+                    LIMIT {limit}
+                    """
                     
                 elif data_type == "fbref_matches":
-                    # Get professional match data from FBRef
-                    if not self.fbref_client.nwsl_league_id:
-                        self.fbref_client.find_nwsl_league_id()
-                    
-                    if not self.fbref_client.nwsl_league_id:
-                        return [types.TextContent(
-                            type="text",
-                            text="Error: Could not find NWSL league in FBRef API"
-                        )]
-                    
-                    df = self.fbref_client.get_match_stats(season)
-                    if df.empty:
-                        return [types.TextContent(
-                            type="text",
-                            text=f"No FBRef match data found for season {season}"
-                        )]
+                    # Get professional match data from BigQuery
+                    query = f"""
+                    SELECT *
+                    FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_matches_{season}`
+                    {f"WHERE (home_team_id = '{team_id}' OR away_team_id = '{team_id}')" if team_id else ""}
+                    ORDER BY match_date DESC
+                    LIMIT {limit}
+                    """
                     
                 elif data_type == "fbref_player_match_stats":
-                    # Get detailed player match statistics from FBRef
-                    if not self.fbref_client.nwsl_league_id:
-                        self.fbref_client.find_nwsl_league_id()
-                    
-                    if not self.fbref_client.nwsl_league_id:
-                        return [types.TextContent(
-                            type="text",
-                            text="Error: Could not find NWSL league in FBRef API"
-                        )]
-                    
-                    df = self.fbref_client.get_player_match_stats(season)
-                    if df.empty:
-                        return [types.TextContent(
-                            type="text",
-                            text=f"No FBRef player match stats found for season {season}"
-                        )]
+                    # Get detailed player match statistics from BigQuery
+                    query = f"""
+                    SELECT *
+                    FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_player_match_stats_{season}`
+                    {f"WHERE team_id = '{team_id}'" if team_id else ""}
+                    ORDER BY match_date DESC, xg DESC
+                    LIMIT {limit}
+                    """
                     
                 else:
                     return [types.TextContent(
