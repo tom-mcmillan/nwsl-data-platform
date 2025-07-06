@@ -56,10 +56,7 @@ options:
 # Build timeout
 timeout: '1200s'
 
-# Substitutions for flexibility
-substitutions:
-  _REGION: 'us-central1'
-  _SERVICE_NAME: 'nwsl-analytics-mcp'
+# Substitutions (removed unused ones to fix deployment error)
 
 # Images to be pushed to registry
 images:
