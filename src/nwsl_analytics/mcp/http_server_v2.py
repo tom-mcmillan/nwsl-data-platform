@@ -66,8 +66,9 @@ async def root():
         ],
         "data_available": [
             "FBref professional statistics (2020-2025)",
-            "Basic match data (2016-2024)",
-            "14 NWSL teams",
+            "Complete NWSL player roster (1,016 players, 2016-2024)",
+            "NWSL team information (17 teams)",
+            "Match data (686 games, 2021-2024)",
             "xG, possession, passing accuracy, defensive stats"
         ]
     }
@@ -453,6 +454,81 @@ def handle_tools_list() -> Dict[str, Any]:
                 },
                 "required": ["team1", "team2", "season"]
             }
+        },
+        # New NWSL Player Statistics Tools
+        {
+            "name": "get_nwsl_players",
+            "title": "NWSL Player Roster",
+            "description": "Get comprehensive NWSL player roster data including positions, nationalities, and seasons played. Covers all players from 2016-2024.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "player_name": {
+                        "type": "string",
+                        "description": "Optional: Search for specific player by name (partial matches allowed)"
+                    },
+                    "position": {
+                        "type": "string",
+                        "description": "Optional: Filter by position (GK, DF, MF, ST, etc.)"
+                    },
+                    "nationality": {
+                        "type": "string",
+                        "description": "Optional: Filter by nationality (e.g., 'USA', 'Canada')"
+                    },
+                    "team_name": {
+                        "type": "string",
+                        "description": "Optional: Filter by team name"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of players to return (default: 50)",
+                        "minimum": 1,
+                        "maximum": 500
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "get_nwsl_teams",
+            "title": "NWSL Team Information",
+            "description": "Get comprehensive NWSL team information including names, abbreviations, and identifiers.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_name": {
+                        "type": "string",
+                        "description": "Optional: Search for specific team by name (partial matches allowed)"
+                    }
+                },
+                "required": []
+            }
+        },
+        {
+            "name": "get_nwsl_games",
+            "title": "NWSL Match Data",
+            "description": "Get detailed NWSL match data including scores, attendance, and match information from 2021-2024.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (2021, 2022, 2023, 2024, or 'all')",
+                        "enum": ["2021", "2022", "2023", "2024", "all"]
+                    },
+                    "team_name": {
+                        "type": "string",
+                        "description": "Optional: Filter games for specific team"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of games to return (default: 20)",
+                        "minimum": 1,
+                        "maximum": 200
+                    }
+                },
+                "required": ["season"]
+            }
         }
     ]
     
@@ -485,6 +561,12 @@ async def handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
         result = await mcp_server._find_correlations(tool_args)
     elif tool_name == "compare_teams":
         result = await mcp_server._compare_teams(tool_args)
+    elif tool_name == "get_nwsl_players":
+        result = await mcp_server._get_nwsl_players(tool_args)
+    elif tool_name == "get_nwsl_teams":
+        result = await mcp_server._get_nwsl_teams(tool_args)
+    elif tool_name == "get_nwsl_games":
+        result = await mcp_server._get_nwsl_games(tool_args)
     else:
         raise ValueError(f"Unknown tool: {tool_name}")
     

@@ -55,12 +55,29 @@ make test
 
 ## Architecture
 
-src/nwsl_analytics/
-├── config/          # Configuration management
-├── data/            # Data ingestion and models
-├── analytics/       # Analysis engines
-├── mcp/             # MCP server and tools
-└── utils/           # Utilities and helpers
+```
+nwsl-data-platform/
+├── data/                    # All data files organized by processing stage
+│   ├── raw/excel/          # Your Excel player stats files
+│   ├── processed/          # Clean CSV files ready for BigQuery  
+│   └── external/           # Third-party data sources
+├── analytics/              # Advanced soccer analytics modules
+│   ├── expected_goals/     # xG calculation and analysis
+│   ├── replacement_value/  # Player WAR calculations
+│   ├── shot_quality/       # Shot profiling and analysis
+│   ├── correlations/       # Statistical pattern discovery
+│   └── win_expectancy/     # Match outcome probability
+├── scripts/
+│   ├── ingestion/          # Data processing scripts
+│   ├── deployment/         # BigQuery upload scripts
+│   └── maintenance/        # Utility scripts
+├── src/nwsl_analytics/     # Core platform code
+│   ├── config/            # Configuration management
+│   ├── data/              # Data models and ingestion
+│   ├── mcp/               # MCP server and tools
+│   └── utils/             # Utilities and helpers
+└── tests/                 # Test suites
+```
 
 ## Development
 

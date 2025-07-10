@@ -25,6 +25,8 @@ class NWSLAnalyticsServer:
         self.server = Server("nwsl-analytics")
         self.bigquery_client = bigquery.Client(project=settings.gcp_project_id)
         self.dataset_id = settings.bigquery_dataset_id
+        # New NWSL player stats dataset
+        self.player_dataset_id = "nwsl_player_stats"
         
         # Register MCP tools, resources, and prompts
         self._register_tools()
@@ -247,6 +249,81 @@ class NWSLAnalyticsServer:
                         },
                         "required": ["season", "team1_name", "team2_name"]
                     }
+                ),
+                # New NWSL Player Statistics Tools
+                types.Tool(
+                    name="get_nwsl_players",
+                    title="NWSL Player Roster",
+                    description="Get comprehensive NWSL player roster data including positions, nationalities, and seasons played. Covers all players from 2016-2024.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "player_name": {
+                                "type": "string",
+                                "description": "Optional: Search for specific player by name (partial matches allowed)"
+                            },
+                            "position": {
+                                "type": "string",
+                                "description": "Optional: Filter by position (GK, DF, MF, ST, etc.)"
+                            },
+                            "nationality": {
+                                "type": "string",
+                                "description": "Optional: Filter by nationality (e.g., 'USA', 'Canada')"
+                            },
+                            "team_name": {
+                                "type": "string",
+                                "description": "Optional: Filter by team name"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Number of players to return (default: 50)",
+                                "minimum": 1,
+                                "maximum": 500
+                            }
+                        },
+                        "required": []
+                    }
+                ),
+                types.Tool(
+                    name="get_nwsl_teams",
+                    title="NWSL Team Information",
+                    description="Get comprehensive NWSL team information including names, abbreviations, and identifiers.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "team_name": {
+                                "type": "string",
+                                "description": "Optional: Search for specific team by name (partial matches allowed)"
+                            }
+                        },
+                        "required": []
+                    }
+                ),
+                types.Tool(
+                    name="get_nwsl_games",
+                    title="NWSL Match Data",
+                    description="Get detailed NWSL match data including scores, attendance, and match information from 2021-2024.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "season": {
+                                "type": "string",
+                                "description": "Season year (2021, 2022, 2023, 2024, or 'all')",
+                                "enum": ["2021", "2022", "2023", "2024", "all"]
+                            },
+                            "team_name": {
+                                "type": "string",
+                                "description": "Optional: Filter games for specific team"
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Number of games to return (default: 20)",
+                                "minimum": 1,
+                                "maximum": 200
+                            }
+                        },
+                        "required": ["season"]
+                    }
                 )
             ]
 
@@ -272,6 +349,12 @@ class NWSLAnalyticsServer:
                 return await self._find_correlations(arguments)
             elif name == "compare_teams":
                 return await self._compare_teams(arguments)
+            elif name == "get_nwsl_players":
+                return await self._get_nwsl_players(arguments)
+            elif name == "get_nwsl_teams":
+                return await self._get_nwsl_teams(arguments)
+            elif name == "get_nwsl_games":
+                return await self._get_nwsl_games(arguments)
             else:
                 raise ValueError(f"Unknown tool: {name}")
 
@@ -1055,6 +1138,201 @@ class NWSLAnalyticsServer:
             return [types.TextContent(
                 type="text",
                 text=f"Error comparing teams: {str(e)}"
+            )]
+
+    async def _get_nwsl_players(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """Get NWSL player roster data"""
+        player_name = args.get("player_name")
+        position = args.get("position")
+        nationality = args.get("nationality")
+        team_name = args.get("team_name")
+        limit = args.get("limit", 50)
+        
+        try:
+            # Build query conditions
+            conditions = []
+            if player_name:
+                conditions.append(f"LOWER(player_name) LIKE LOWER('%{player_name}%')")
+            if position:
+                conditions.append(f"LOWER(primary_general_position) LIKE LOWER('%{position}%')")
+            if nationality:
+                conditions.append(f"LOWER(nationality) LIKE LOWER('%{nationality}%')")
+            # Note: team_name filtering not available in players table
+            # if team_name:
+            #     conditions.append(f"LOWER(team_name) LIKE LOWER('%{team_name}%')")
+            
+            where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+            
+            query = f"""
+            SELECT 
+                player_name,
+                primary_general_position as position,
+                nationality,
+                season_name,
+                birth_date,
+                CONCAT(CAST(height_ft AS STRING), ' ft ', CAST(height_in AS STRING), ' in') as height_ft_in,
+                player_id
+            FROM `{settings.gcp_project_id}.{self.player_dataset_id}.nwsl_players_complete`
+            {where_clause}
+            ORDER BY player_name
+            LIMIT {limit}
+            """
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            if len(df) == 0:
+                return [types.TextContent(
+                    type="text",
+                    text="No players found matching the criteria."
+                )]
+            
+            result = f"🏃‍♀️ NWSL Players ({len(df)} found)\n"
+            result += "=" * 50 + "\n\n"
+            
+            for _, player in df.iterrows():
+                seasons = str(player['season_name']).replace("['", "").replace("']", "").replace("'", "")
+                result += f"👤 **{player['player_name']}**\n"
+                result += f"   🏆 Position: {player['position']}\n"
+                result += f"   🌍 Nationality: {player['nationality']}\n"
+                result += f"   📅 Seasons: {seasons}\n"
+                if pd.notna(player['height_ft_in']):
+                    result += f"   📏 Height: {player['height_ft_in']}\n"
+                result += "\n"
+            
+            result += f"\n📊 **Summary**: {len(df)} players total"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            logger.error(f"Error getting NWSL players: {e}")
+            return [types.TextContent(
+                type="text",
+                text=f"Error retrieving player data: {str(e)}"
+            )]
+
+    async def _get_nwsl_teams(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """Get NWSL team information"""
+        team_name = args.get("team_name")
+        
+        try:
+            where_clause = ""
+            if team_name:
+                where_clause = f"WHERE LOWER(team_name) LIKE LOWER('%{team_name}%')"
+            
+            query = f"""
+            SELECT 
+                team_name,
+                team_abbreviation,
+                team_short_name,
+                team_id
+            FROM `{settings.gcp_project_id}.{self.player_dataset_id}.nwsl_teams_complete`
+            {where_clause}
+            ORDER BY team_name
+            """
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            if len(df) == 0:
+                return [types.TextContent(
+                    type="text",
+                    text="No teams found matching the criteria."
+                )]
+            
+            result = f"⚽ NWSL Teams ({len(df)} found)\n"
+            result += "=" * 40 + "\n\n"
+            
+            for _, team in df.iterrows():
+                result += f"🏟️ **{team['team_name']}**\n"
+                result += f"   🔤 Abbreviation: {team['team_abbreviation']}\n"
+                result += f"   📝 Short Name: {team['team_short_name']}\n"
+                result += f"   🆔 Team ID: {team['team_id']}\n\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            logger.error(f"Error getting NWSL teams: {e}")
+            return [types.TextContent(
+                type="text",
+                text=f"Error retrieving team data: {str(e)}"
+            )]
+
+    async def _get_nwsl_games(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """Get NWSL match data"""
+        season = args.get("season")
+        team_name = args.get("team_name")
+        limit = args.get("limit", 20)
+        
+        try:
+            # Determine table to query
+            if season == "all":
+                table_name = "nwsl_games_all"
+            else:
+                table_name = f"nwsl_games_{season}"
+            
+            # Build query conditions
+            conditions = []
+            if team_name:
+                conditions.append(f"(LOWER(ht.team_name) LIKE LOWER('%{team_name}%') OR LOWER(at.team_name) LIKE LOWER('%{team_name}%'))")
+            
+            where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
+            
+            query = f"""
+            SELECT 
+                g.date_time_utc,
+                ht.team_name as home_team_name,
+                at.team_name as away_team_name,
+                g.home_score,
+                g.away_score,
+                g.attendance,
+                g.season,
+                g.game_id
+            FROM `{settings.gcp_project_id}.{self.player_dataset_id}.{table_name}` g
+            LEFT JOIN `{settings.gcp_project_id}.{self.player_dataset_id}.nwsl_teams_complete` ht
+                ON g.home_team_id = ht.team_id
+            LEFT JOIN `{settings.gcp_project_id}.{self.player_dataset_id}.nwsl_teams_complete` at  
+                ON g.away_team_id = at.team_id
+            {where_clause}
+            ORDER BY g.date_time_utc DESC
+            LIMIT {limit}
+            """
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            if len(df) == 0:
+                return [types.TextContent(
+                    type="text",
+                    text=f"No games found for season {season}."
+                )]
+            
+            result = f"⚽ NWSL Games - {season.title()} ({len(df)} found)\n"
+            result += "=" * 50 + "\n\n"
+            
+            for _, game in df.iterrows():
+                date_str = pd.to_datetime(game['date_time_utc']).strftime('%Y-%m-%d')
+                result += f"📅 **{date_str}**\n"
+                result += f"   🏠 {game['home_team_name']} {game['home_score']} - {game['away_score']} {game['away_team_name']} 🏃‍♀️\n"
+                if pd.notna(game['attendance']) and game['attendance'] > 0:
+                    result += f"   👥 Attendance: {int(game['attendance']):,}\n"
+                result += "\n"
+            
+            # Add summary statistics
+            total_goals = df['home_score'].sum() + df['away_score'].sum()
+            avg_goals = total_goals / len(df)
+            avg_attendance = df['attendance'].mean() if df['attendance'].notna().any() else 0
+            
+            result += f"📊 **Match Statistics**\n"
+            result += f"   🥅 Total Goals: {total_goals}\n"
+            result += f"   📈 Average Goals/Game: {avg_goals:.1f}\n"
+            if avg_attendance > 0:
+                result += f"   👥 Average Attendance: {avg_attendance:,.0f}\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            logger.error(f"Error getting NWSL games: {e}")
+            return [types.TextContent(
+                type="text",
+                text=f"Error retrieving game data: {str(e)}"
             )]
 
     def _register_resources(self):
