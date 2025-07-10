@@ -109,7 +109,7 @@ class NWSLAnalyticsServer:
                     AVG(attendance) as avg_attendance,
                     (SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END) * 3 + 
                      SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END)) as points
-                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                FROM `{settings.gcp_project_id}.nwsl_analytics.nwsl_games_{season}`
                 {"WHERE home_team_id = '" + team_id + "'" if team_id else ""}
                 GROUP BY home_team_id
                 
@@ -126,7 +126,7 @@ class NWSLAnalyticsServer:
                     AVG(attendance) as avg_attendance,
                     (SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END) * 3 + 
                      SUM(CASE WHEN away_score = home_score THEN 1 ELSE 0 END)) as points
-                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                FROM `{settings.gcp_project_id}.nwsl_analytics.nwsl_games_{season}`
                 {"WHERE away_team_id = '" + team_id + "'" if team_id else ""}
                 GROUP BY away_team_id
                 ORDER BY points DESC
@@ -143,7 +143,7 @@ class NWSLAnalyticsServer:
                     home_score as goals,
                     away_score as goals_against,
                     attendance
-                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                FROM `{settings.gcp_project_id}.nwsl_analytics.nwsl_games_{season}`
                 {"WHERE home_team_id = '" + team_id + "'" if team_id else ""}
                 ORDER BY date_time_utc DESC
                 LIMIT {limit}
@@ -161,7 +161,7 @@ class NWSLAnalyticsServer:
                     away_score,
                     attendance,
                     (home_score - away_score) as goal_difference
-                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
+                FROM `{settings.gcp_project_id}.nwsl_analytics.nwsl_games_{season}`
                 {"WHERE home_team_id = '" + team_id + "' OR away_team_id = '" + team_id + "'" if team_id else ""}
                 ORDER BY date_time_utc DESC
                 LIMIT {limit}
@@ -171,7 +171,7 @@ class NWSLAnalyticsServer:
                 # Team information from teams table
                 query = f"""
                 SELECT *
-                FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_teams_all`
+                FROM `{settings.gcp_project_id}.nwsl_analytics.nwsl_teams_all`
                 {"WHERE team_id = '" + team_id + "'" if team_id else ""}
                 LIMIT {limit}
                 """
