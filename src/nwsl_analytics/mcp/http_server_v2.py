@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from .server import NWSLAnalyticsServer
+from .analytics_server import NWSLAnalyticsServer
 from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
