@@ -9,7 +9,7 @@ This document explains how to configure Claude Desktop to connect to your NWSL A
 ### 🤖 **OpenAI Playground**
 Use this URL directly in the MCP server configuration:
 ```
-https://nwsl-analytics-mcp-havwlplupa-uc.a.run.app/mcp
+https://nwsl-analytics-mcp-78453984015.us-central1.run.app/mcp
 ```
 
 ### 🖥️ **Claude Desktop**

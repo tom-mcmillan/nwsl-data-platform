@@ -243,6 +243,189 @@ def handle_tools_list() -> Dict[str, Any]:
                 },
                 "required": ["data_type", "season"]
             }
+        },
+        # Phase 1 Basic Analytics Tools
+        {
+            "name": "get_player_stats",
+            "title": "Player Statistics",
+            "description": "Get comprehensive player statistics with search by name/team. Returns goals, assists, minutes, and performance metrics.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    },
+                    "player_name": {
+                        "type": "string",
+                        "description": "Optional: Search for specific player by name (partial matches allowed)"
+                    },
+                    "team_name": {
+                        "type": "string",
+                        "description": "Optional: Filter by team name (e.g., 'North Carolina Courage')"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of players to return (default: 20)",
+                        "minimum": 1,
+                        "maximum": 100
+                    }
+                },
+                "required": ["season"]
+            }
+        },
+        {
+            "name": "get_team_stats",
+            "title": "Team Statistics",
+            "description": "Get comprehensive team statistics including goals, xG, possession, and defensive metrics.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    },
+                    "team_name": {
+                        "type": "string",
+                        "description": "Optional: Filter by specific team name"
+                    }
+                },
+                "required": ["season"]
+            }
+        },
+        {
+            "name": "get_standings",
+            "title": "League Standings",
+            "description": "Get current league standings with points, wins, losses, and goal difference.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    }
+                },
+                "required": ["season"]
+            }
+        },
+        {
+            "name": "get_match_results",
+            "title": "Match Results",
+            "description": "Get recent match results with scores, attendance, and basic match statistics.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    },
+                    "team_name": {
+                        "type": "string",
+                        "description": "Optional: Filter by specific team"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Number of matches to return (default: 10)",
+                        "minimum": 1,
+                        "maximum": 50
+                    }
+                },
+                "required": ["season"]
+            }
+        },
+        # Phase 2 Advanced Analytics Tools
+        {
+            "name": "analyze_player_performance",
+            "title": "Advanced Player Analysis",
+            "description": "Deep analysis of player performance including efficiency metrics, xG analysis, and performance trends.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "player_name": {
+                        "type": "string",
+                        "description": "Name of the player to analyze"
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    }
+                },
+                "required": ["player_name", "season"]
+            }
+        },
+        {
+            "name": "analyze_team_performance",
+            "title": "Advanced Team Analysis",
+            "description": "Deep analysis of team performance including tactical insights, efficiency metrics, and comparative analysis.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team_name": {
+                        "type": "string",
+                        "description": "Name of the team to analyze"
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    }
+                },
+                "required": ["team_name", "season"]
+            }
+        },
+        {
+            "name": "find_correlations",
+            "title": "Statistical Correlations",
+            "description": "Find statistical correlations and patterns in team/player performance to uncover insights about what drives success.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "analysis_type": {
+                        "type": "string",
+                        "description": "Type of correlation analysis",
+                        "enum": ["team_performance", "player_performance", "match_outcomes"]
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    },
+                    "metric_focus": {
+                        "type": "string",
+                        "description": "Optional: Focus on specific metrics (e.g., 'goals', 'possession', 'xG')"
+                    }
+                },
+                "required": ["analysis_type", "season"]
+            }
+        },
+        {
+            "name": "compare_teams",
+            "title": "Team Comparison",
+            "description": "Compare two teams across multiple dimensions including tactical analysis, strengths/weaknesses, and head-to-head performance.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "team1": {
+                        "type": "string",
+                        "description": "First team to compare"
+                    },
+                    "team2": {
+                        "type": "string",
+                        "description": "Second team to compare"
+                    },
+                    "season": {
+                        "type": "string",
+                        "description": "Season year (e.g., '2024')",
+                        "pattern": "^20[0-9]{2}$"
+                    }
+                },
+                "required": ["team1", "team2", "season"]
+            }
         }
     ]
     
@@ -259,6 +442,22 @@ async def handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
     # Execute the tool
     if tool_name == "get_raw_data":
         result = await mcp_server._get_raw_data(tool_args)
+    elif tool_name == "get_player_stats":
+        result = await mcp_server._get_player_stats(tool_args)
+    elif tool_name == "get_team_stats":
+        result = await mcp_server._get_team_stats(tool_args)
+    elif tool_name == "get_standings":
+        result = await mcp_server._get_standings(tool_args)
+    elif tool_name == "get_match_results":
+        result = await mcp_server._get_match_results(tool_args)
+    elif tool_name == "analyze_player_performance":
+        result = await mcp_server._analyze_player_performance(tool_args)
+    elif tool_name == "analyze_team_performance":
+        result = await mcp_server._analyze_team_performance(tool_args)
+    elif tool_name == "find_correlations":
+        result = await mcp_server._find_correlations(tool_args)
+    elif tool_name == "compare_teams":
+        result = await mcp_server._compare_teams(tool_args)
     else:
         raise ValueError(f"Unknown tool: {tool_name}")
     

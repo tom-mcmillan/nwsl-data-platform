@@ -10,4 +10,4 @@ echo "🌐 Host: ${HOST}:${PORT}"
 
 # Start the HTTP server (Cloud Run compatible)
 cd /app
-python -m src.nwsl_analytics.mcp.http_server
+python -m src.nwsl_analytics.mcp.http_server_v2
