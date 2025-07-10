@@ -144,12 +144,12 @@ class NWSLAnalyticsServer:
                                     "enum": ["player_xg", "league_patterns", "overperformers", "team_efficiency"],
                                     "description": "Type of xG analysis to perform"
                                 },
-                                "season": {"type": "string", "default": "2024"},
+                                "season": {"type": "string", "description": "Season year (e.g., '2025', '2024', '2023')"},
                                 "player_name": {"type": "string", "description": "Specific player name (optional)"},
                                 "team": {"type": "string", "description": "Specific team (optional)"},
                                 "min_minutes": {"type": "integer", "default": 450}
                             },
-                            "required": ["analysis_type"]
+                            "required": ["analysis_type", "season"]
                         }
                     ),
                     types.Tool(
@@ -164,11 +164,11 @@ class NWSLAnalyticsServer:
                                     "enum": ["player_profiles", "positional_patterns", "quality_leaders", "team_styles"],
                                     "description": "Type of shot quality analysis"
                                 },
-                                "season": {"type": "string", "default": "2024"},
+                                "season": {"type": "string", "description": "Season year (e.g., '2025', '2024', '2023')"},
                                 "min_minutes": {"type": "integer", "default": 450},
                                 "min_shots": {"type": "number", "default": 2.0}
                             },
-                            "required": ["analysis_type"]
+                            "required": ["analysis_type", "season"]
                         }
                     ),
                     types.Tool(
@@ -183,11 +183,11 @@ class NWSLAnalyticsServer:
                                     "enum": ["replacement_baselines", "player_war", "team_construction", "undervalued_players"],
                                     "description": "Type of replacement value analysis"
                                 },
-                                "season": {"type": "string", "default": "2024"},
+                                "season": {"type": "string", "description": "Season year (e.g., '2025', '2024', '2023')"},
                                 "min_minutes": {"type": "integer", "default": 450},
                                 "min_war": {"type": "number", "default": 0.5}
                             },
-                            "required": ["analysis_type"]
+                            "required": ["analysis_type", "season"]
                         }
                     )
                 ])
@@ -243,7 +243,9 @@ class NWSLAnalyticsServer:
         
         try:
             analysis_type = args["analysis_type"]
-            season = args.get("season", "2024")
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
             
             if analysis_type == "player_xg":
                 team_name = self._normalize_team_name(args.get("team")) if args.get("team") else None
@@ -303,7 +305,9 @@ class NWSLAnalyticsServer:
         
         try:
             analysis_type = args["analysis_type"]
-            season = args.get("season", "2024")
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
             
             if analysis_type == "player_profiles":
                 df = self.shot_profiler.analyze_shooting_profiles(season, args.get("min_minutes", 450))
@@ -350,7 +354,9 @@ class NWSLAnalyticsServer:
         
         try:
             analysis_type = args["analysis_type"]
-            season = args.get("season", "2024")
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
             
             if analysis_type == "replacement_baselines":
                 baselines = self.war_estimator.calculate_replacement_baselines(season, args.get("min_minutes", 450))

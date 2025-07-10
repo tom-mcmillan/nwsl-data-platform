@@ -118,7 +118,7 @@ class ExpectedGoalsCalculator:
         
         return self.client.query(query).to_dataframe()
     
-    def analyze_goal_generation_patterns(self, season: str = "2024") -> Dict:
+    def analyze_goal_generation_patterns(self, season: str) -> Dict:
         """
         Analyze league-wide goal generation patterns
         
@@ -222,7 +222,7 @@ class ExpectedGoalsCalculator:
         
         return result
     
-    def find_xg_overperformers(self, season: str = "2024", min_minutes: int = 900) -> pd.DataFrame:
+    def find_xg_overperformers(self, season: str, min_minutes: int = 900) -> pd.DataFrame:
         """
         Find players who significantly over/under-perform their xG
         
@@ -275,7 +275,7 @@ class ExpectedGoalsCalculator:
         
         return self.client.query(query).to_dataframe()
     
-    def calculate_team_xg_efficiency(self, season: str = "2024") -> pd.DataFrame:
+    def calculate_team_xg_efficiency(self, season: str) -> pd.DataFrame:
         """
         Calculate team-level xG efficiency and goal generation patterns
         """

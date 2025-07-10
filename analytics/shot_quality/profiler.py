@@ -24,7 +24,7 @@ class ShotQualityProfiler:
         self.project_id = project_id
         self.client = bigquery.Client(project=project_id)
         
-    def analyze_shooting_profiles(self, season: str = "2024", min_minutes: int = 450) -> pd.DataFrame:
+    def analyze_shooting_profiles(self, season: str, min_minutes: int = 450) -> pd.DataFrame:
         """
         Analyze player shooting profiles and shot quality metrics
         
@@ -118,7 +118,7 @@ class ShotQualityProfiler:
         
         return self.client.query(query).to_dataframe()
     
-    def analyze_positional_shooting_patterns(self, season: str = "2024") -> Dict:
+    def analyze_positional_shooting_patterns(self, season: str) -> Dict:
         """
         Analyze how shooting patterns vary by position
         
@@ -200,7 +200,7 @@ class ShotQualityProfiler:
             }
         }
     
-    def find_shot_quality_leaders(self, season: str = "2024", min_shots: float = 2.0) -> pd.DataFrame:
+    def find_shot_quality_leaders(self, season: str, min_shots: float = 2.0) -> pd.DataFrame:
         """
         Find players with the highest quality shot generation
         
@@ -277,7 +277,7 @@ class ShotQualityProfiler:
         
         return self.client.query(query).to_dataframe()
     
-    def analyze_team_shooting_styles(self, season: str = "2024") -> pd.DataFrame:
+    def analyze_team_shooting_styles(self, season: str) -> pd.DataFrame:
         """
         Analyze team-level shooting styles and patterns
         """

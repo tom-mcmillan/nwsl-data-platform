@@ -32,7 +32,7 @@ class ReplacementValueEstimator:
             'goalkeeper': 0.20    # Bottom 20% of goalkeepers (smaller sample)
         }
         
-    def calculate_replacement_baselines(self, season: str = "2024", min_minutes: int = 450) -> Dict:
+    def calculate_replacement_baselines(self, season: str, min_minutes: int = 450) -> Dict:
         """
         Calculate replacement level baselines for each position
         
@@ -167,7 +167,7 @@ class ReplacementValueEstimator:
             }
         }
     
-    def calculate_player_war_estimates(self, season: str = "2024", min_minutes: int = 450) -> pd.DataFrame:
+    def calculate_player_war_estimates(self, season: str, min_minutes: int = 450) -> pd.DataFrame:
         """
         Calculate WAR (Wins Above Replacement) estimates for players
         
@@ -275,7 +275,7 @@ class ReplacementValueEstimator:
         
         return df.sort_values('value_above_replacement', ascending=False)
     
-    def analyze_team_roster_construction(self, season: str = "2024") -> pd.DataFrame:
+    def analyze_team_roster_construction(self, season: str) -> pd.DataFrame:
         """
         Analyze team roster construction using replacement value concepts
         
@@ -325,7 +325,7 @@ class ReplacementValueEstimator:
         
         return team_analysis.sort_values('total_war', ascending=False)
     
-    def find_undervalued_players(self, season: str = "2024", min_war: float = 0.5) -> pd.DataFrame:
+    def find_undervalued_players(self, season: str, min_war: float = 0.5) -> pd.DataFrame:
         """
         Find players providing high value above replacement
         
