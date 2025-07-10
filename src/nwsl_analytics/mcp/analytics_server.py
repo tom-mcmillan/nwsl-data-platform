@@ -49,6 +49,7 @@ class NWSLAnalyticsServer:
                 self.shot_profiler = ShotQualityProfiler(project_id)
             if ReplacementValueEstimator:
                 self.war_estimator = ReplacementValueEstimator(project_id)
+            logger.info("✅ Analytics tools initialized successfully")
         except Exception as e:
             logger.warning(f"Could not initialize BigQuery client: {e}")
             self.bigquery_client = None
@@ -56,10 +57,48 @@ class NWSLAnalyticsServer:
             self.shot_profiler = None
             self.war_estimator = None
         
+        # Team name mappings for user-friendly queries
+        self.team_mappings = {
+            'north carolina courage': 'Courage',
+            'nc courage': 'Courage',
+            'courage': 'Courage',
+            'chicago red stars': 'Red Stars',
+            'red stars': 'Red Stars',
+            'houston dash': 'Dash',
+            'dash': 'Dash',
+            'orlando pride': 'Pride',
+            'pride': 'Pride',
+            'portland thorns': 'Thorns',
+            'thorns': 'Thorns',
+            'washington spirit': 'Spirit',
+            'spirit': 'Spirit',
+            'gotham fc': 'Gotham FC',
+            'gotham': 'Gotham FC',
+            'kansas city current': 'Current',
+            'current': 'Current',
+            'san diego wave': 'Wave',
+            'wave': 'Wave',
+            'angel city': 'Angel City',
+            'racing louisville': 'Louisville',
+            'louisville': 'Louisville',
+            'seattle reign': 'Reign',
+            'reign': 'Reign',
+            'utah royals': 'Royals',
+            'royals': 'Royals',
+            'bay fc': 'Bay FC'
+        }
+        
         # Register MCP tools, resources, and prompts
         self._register_tools()
         self._register_resources()
         self._register_prompts()
+    
+    def _normalize_team_name(self, team_name: str) -> str:
+        """Convert user-friendly team names to database Squad names"""
+        if not team_name:
+            return team_name
+        normalized = team_name.lower().strip()
+        return self.team_mappings.get(normalized, team_name)
     
     def _register_tools(self):
         """Register all NWSL research analytics tools"""
@@ -207,10 +246,11 @@ class NWSLAnalyticsServer:
             season = args.get("season", "2024")
             
             if analysis_type == "player_xg":
+                team_name = self._normalize_team_name(args.get("team")) if args.get("team") else None
                 df = self.xg_calculator.get_player_xg_analysis(
                     player_name=args.get("player_name"),
                     season=season,
-                    team=args.get("team")
+                    team=team_name
                 )
                 
                 result = f"Player xG Analysis for {season}:\n\n"

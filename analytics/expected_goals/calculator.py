@@ -46,7 +46,15 @@ class ExpectedGoalsCalculator:
         if season:
             where_conditions.append(f"season = '{season}'")
         if team:
-            where_conditions.append(f"Squad = '{team}'")
+            # Handle both full names and short names
+            if team.lower() in ['north carolina courage', 'nc courage', 'courage']:
+                where_conditions.append("Squad = 'Courage'")
+            elif team.lower() in ['chicago red stars', 'red stars']:
+                where_conditions.append("Squad = 'Red Stars'")
+            elif team.lower() in ['houston dash', 'dash']:
+                where_conditions.append("Squad = 'Dash'")
+            else:
+                where_conditions.append(f"Squad = '{team}'")
         
         where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
         
