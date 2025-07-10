@@ -14,10 +14,14 @@ import uvicorn
 try:
     from .analytics_server import NWSLAnalyticsServer
     print("✅ Successfully imported analytics_server")
+    SERVER_TYPE = "analytics"
 except ImportError as e:
     print(f"❌ Failed to import analytics_server: {e}")
+    import traceback
+    traceback.print_exc()
     print("📋 Falling back to original server")
     from .server import NWSLAnalyticsServer
+    SERVER_TYPE = "basic"
 from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -55,9 +59,15 @@ INTERNAL_ERROR = -32603
 async def startup_event():
     """Initialize MCP server on startup"""
     global mcp_server
-    logger.info("🚀 Initializing NWSL Analytics MCP Server...")
-    mcp_server = NWSLAnalyticsServer()
-    logger.info("✅ MCP Server initialized successfully")
+    logger.info(f"🚀 Initializing NWSL Analytics MCP Server ({SERVER_TYPE})...")
+    try:
+        mcp_server = NWSLAnalyticsServer()
+        logger.info("✅ MCP Server initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ MCP Server initialization failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 @app.get("/")
 async def root():
