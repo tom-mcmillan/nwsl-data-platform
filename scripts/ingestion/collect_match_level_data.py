@@ -16,7 +16,7 @@ class NWSLMatchLevelStats:
     def __init__(self):
         self.base_url = "https://fbrapi.com"
         self.api_key = None
-        self.rate_limit_delay = 4  # 4 seconds between requests
+        self.rate_limit_delay = 6  # 6 seconds between requests (FBref requirement)
         
         # Match stat categories for all-players-match-stats endpoint
         self.match_stat_categories = [
