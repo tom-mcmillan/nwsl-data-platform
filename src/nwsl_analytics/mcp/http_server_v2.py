@@ -265,7 +265,14 @@ def handle_tools_list() -> Dict[str, Any]:
             tools = []
             
             # Check if research analytics are available
+            print(f"Debug: SERVER_TYPE={SERVER_TYPE}, mcp_server exists={mcp_server is not None}")
+            if mcp_server:
+                print(f"Debug: has xg_calculator attr={hasattr(mcp_server, 'xg_calculator')}")
+                if hasattr(mcp_server, 'xg_calculator'):
+                    print(f"Debug: xg_calculator value={mcp_server.xg_calculator}")
+            
             if hasattr(mcp_server, 'xg_calculator') and mcp_server.xg_calculator:
+                print("Debug: Adding research analytics tools")
                 tools.extend([
                     {
                         "name": "expected_goals_analysis",
