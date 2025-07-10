@@ -392,6 +392,270 @@ class NWSLAnalyticsServer:
         except Exception as e:
             return [types.TextContent(type="text", text=f"WAR Analysis failed: {str(e)}")]
     
+    # HTTP-compatible wrapper methods for compatibility with http_server_v2.py
+    async def _get_raw_data(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for raw data queries"""
+        return await self._handle_raw_query(args)
+    
+    async def _get_player_stats(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for player stats (basic implementation)"""
+        try:
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
+            player_name = args.get("player_name")
+            team_name = self._normalize_team_name(args.get("team_name")) if args.get("team_name") else None
+            limit = args.get("limit", 20)
+            
+            query = f"""
+            SELECT player_name, team, goals, assists, minutes_played, 
+                   expected_goals, expected_assists, shots_on_target_pct
+            FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+            WHERE season = '{season}'
+            """
+            
+            if player_name:
+                query += f" AND LOWER(player_name) LIKE '%{player_name.lower()}%'"
+            if team_name:
+                query += f" AND team = '{team_name}'"
+            
+            query += f" ORDER BY goals DESC LIMIT {limit}"
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            result = f"Player Statistics ({season}):\n\n"
+            for _, player in df.iterrows():
+                result += f"• {player['player_name']} ({player['team']}): {player['goals']} goals, {player['assists']} assists, {player['minutes_played']} minutes\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Player stats failed: {str(e)}")]
+    
+    async def _get_team_stats(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for team stats"""
+        try:
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
+            team_name = args.get("team_name")
+            
+            # Aggregate player stats to team level
+            query = f"""
+            SELECT team, 
+                   SUM(goals) as total_goals,
+                   SUM(assists) as total_assists,
+                   SUM(expected_goals) as total_xg,
+                   COUNT(*) as squad_size
+            FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+            WHERE season = '{season}'
+            """
+            
+            if team_name:
+                normalized_team = self._normalize_team_name(team_name)
+                query += f" AND team = '{normalized_team}'"
+            
+            query += " GROUP BY team ORDER BY total_goals DESC"
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            result = f"Team Statistics ({season}):\n\n"
+            for _, team in df.iterrows():
+                result += f"• {team['team']}: {team['total_goals']} goals, {team['total_xg']:.1f} xG, {team['squad_size']} players\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Team stats failed: {str(e)}")]
+    
+    async def _get_standings(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for league standings"""
+        try:
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
+            
+            # Calculate standings from team stats
+            query = f"""
+            SELECT team,
+                   SUM(goals) as goals_for,
+                   COUNT(*) as games_played
+            FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+            WHERE season = '{season}'
+            GROUP BY team
+            ORDER BY goals_for DESC
+            """
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            result = f"League Standings ({season}) - by Goals:\n\n"
+            for i, team in df.iterrows():
+                result += f"{i+1}. {team['team']}: {team['goals_for']} goals\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Standings failed: {str(e)}")]
+    
+    async def _get_match_results(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for match results"""
+        try:
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
+            limit = args.get("limit", 10)
+            
+            result = f"Match Results ({season}):\n\n"
+            result += "Note: Individual match data not available in current dataset.\n"
+            result += "Available data includes season-long player statistics aggregated by team.\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Match results failed: {str(e)}")]
+    
+    async def _analyze_player_performance(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for player performance analysis"""
+        if "season" not in args:
+            return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+        player_name = args.get("player_name")
+        season = args["season"]
+        
+        return await self._get_player_stats({"season": season, "player_name": player_name, "limit": 1})
+    
+    async def _analyze_team_performance(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for team performance analysis"""
+        if "season" not in args:
+            return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+        team_name = args.get("team_name")
+        season = args["season"]
+        
+        return await self._get_team_stats({"season": season, "team_name": team_name})
+    
+    async def _find_correlations(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for correlation analysis"""
+        try:
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            analysis_type = args.get("analysis_type", "player_performance")
+            season = args["season"]
+            
+            query = f"""
+            SELECT 
+                CORR(goals, expected_goals) as goals_xg_correlation,
+                CORR(assists, expected_assists) as assists_xa_correlation,
+                COUNT(*) as sample_size
+            FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+            WHERE season = '{season}' AND minutes_played > 450
+            """
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            result = f"Statistical Correlations ({season}):\n\n"
+            row = df.iloc[0]
+            result += f"• Goals vs xG correlation: {row['goals_xg_correlation']:.3f}\n"
+            result += f"• Assists vs xA correlation: {row['assists_xa_correlation']:.3f}\n"
+            result += f"• Sample size: {row['sample_size']} players\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Correlation analysis failed: {str(e)}")]
+    
+    async def _compare_teams(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for team comparison"""
+        if "season" not in args:
+            return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+        team1 = args.get("team1")
+        team2 = args.get("team2")
+        season = args["season"]
+        
+        team1_stats = await self._get_team_stats({"season": season, "team_name": team1})
+        team2_stats = await self._get_team_stats({"season": season, "team_name": team2})
+        
+        result = f"Team Comparison ({season}):\n\n"
+        result += f"{team1}:\n{team1_stats[0].text}\n"
+        result += f"{team2}:\n{team2_stats[0].text}\n"
+        
+        return [types.TextContent(type="text", text=result)]
+    
+    async def _get_nwsl_players(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for NWSL player roster"""
+        try:
+            player_name = args.get("player_name")
+            position = args.get("position")
+            nationality = args.get("nationality")
+            team_name = args.get("team_name")
+            limit = args.get("limit", 50)
+            
+            query = f"""
+            SELECT DISTINCT player_name, team, position, nationality
+            FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+            WHERE 1=1
+            """
+            
+            if player_name:
+                query += f" AND LOWER(player_name) LIKE '%{player_name.lower()}%'"
+            if position:
+                query += f" AND position = '{position}'"
+            if nationality:
+                query += f" AND nationality = '{nationality}'"
+            if team_name:
+                normalized_team = self._normalize_team_name(team_name)
+                query += f" AND team = '{normalized_team}'"
+            
+            query += f" ORDER BY player_name LIMIT {limit}"
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            result = "NWSL Player Roster:\n\n"
+            for _, player in df.iterrows():
+                result += f"• {player['player_name']} ({player['team']}) - {player['position']}, {player['nationality']}\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Player roster failed: {str(e)}")]
+    
+    async def _get_nwsl_teams(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for NWSL team information"""
+        try:
+            query = f"""
+            SELECT DISTINCT team, COUNT(*) as squad_size
+            FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+            GROUP BY team
+            ORDER BY team
+            """
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            result = "NWSL Teams:\n\n"
+            for _, team in df.iterrows():
+                result += f"• {team['team']} ({team['squad_size']} players across all seasons)\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Team info failed: {str(e)}")]
+    
+    async def _get_nwsl_games(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for NWSL games data"""
+        try:
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            season = args["season"]
+            team_name = args.get("team_name")
+            limit = args.get("limit", 20)
+            
+            result = f"NWSL Games ({season}):\n\n"
+            result += "Note: Individual game data not available in current dataset.\n"
+            result += "Available data includes season-long player statistics.\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Games data failed: {str(e)}")]
+    
     def _register_resources(self):
         """Register resources (datasets, schemas)"""
         
