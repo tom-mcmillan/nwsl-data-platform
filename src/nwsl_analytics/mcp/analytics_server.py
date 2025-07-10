@@ -135,7 +135,7 @@ class NWSLAnalyticsServer:
                     types.Tool(
                         name="expected_goals_analysis",
                         title="Expected Goals Calculator",
-                        description="Analyze expected goals patterns to answer 'What truly generates goals?' Research includes xG efficiency, overperformers, and goal generation patterns.",
+                        description="Analyze expected goals patterns to answer 'What truly generates goals?' Research includes xG efficiency, overperformers, and goal generation patterns. Updated regularly with current 2025 season data.",
                         inputSchema={
                             "type": "object",
                             "properties": {
@@ -155,7 +155,7 @@ class NWSLAnalyticsServer:
                     types.Tool(
                         name="shot_quality_analysis", 
                         title="Shot Quality Profiler",
-                        description="Analyze shot quality and finishing patterns. Breaks down shooting by volume, quality, position, and conversion rates to understand goal generation.",
+                        description="Analyze shot quality and finishing patterns. Breaks down shooting by volume, quality, position, and conversion rates to understand goal generation. Includes current 2025 season data updated after each match week.",
                         inputSchema={
                             "type": "object",
                             "properties": {
@@ -174,7 +174,7 @@ class NWSLAnalyticsServer:
                     types.Tool(
                         name="replacement_value_analysis",
                         title="Replacement Value Estimator (WAR)",
-                        description="Calculate player value above replacement level to answer 'What is replacement level in soccer?' Provides WAR estimates and roster construction analysis.",
+                        description="Calculate player value above replacement level to answer 'What is replacement level in soccer?' Provides WAR estimates and roster construction analysis. Current 2025 season data enables real-time player valuation.",
                         inputSchema={
                             "type": "object", 
                             "properties": {
@@ -400,14 +400,14 @@ class NWSLAnalyticsServer:
             return [
                 types.Resource(
                     uri="bigquery://nwsl_fbref/player_stats_all_years",
-                    name="NWSL Player Statistics (All Years)",
-                    description="Comprehensive player statistics from 2021-2025 NWSL seasons with xG, progressive play, and performance metrics",
+                    name="NWSL Player Statistics (Live + Historical)",
+                    description="Live 2025 season player statistics plus complete historical data (2021-2024). Updated regularly with current season performance including xG, progressive play, and advanced metrics. Last updated: After most recent match week.",
                     mimeType="application/json"
                 ),
                 types.Resource(
                     uri="bigquery://nwsl_fbref/team_season_analytics", 
-                    name="Team Season Analytics",
-                    description="Team-level aggregated statistics with efficiency metrics and rankings",
+                    name="Team Season Analytics (Current + Historical)",
+                    description="Real-time team performance analytics for 2025 season plus historical comparisons. Updated after each match week with efficiency metrics, rankings, and tactical insights.",
                     mimeType="application/json"
                 )
             ]
@@ -448,6 +448,8 @@ class NWSLAnalyticsServer:
 
 Research Question: {research_question}
 
+CURRENT CONTEXT: It is July 2025. The 2025 NWSL season is currently in progress. You have access to real-time player and team statistics that are updated regularly as games are played.
+
 Core Research Framework:
 1. What truly generates goals? (xG analysis, shot quality, creation patterns)
 2. How do events translate into points? (win expectancy, situational leverage)
@@ -466,11 +468,16 @@ When answering:
 - Map the question to core research areas
 - Use appropriate analytical tools with clear parameters
 - Provide both raw numbers and interpretations
-- Cite data sources and timestamps
+- Always specify data recency (e.g., "as of latest data update")
 - Focus on objective, evidence-based insights
 - Explain statistical significance when relevant
+- For 2025 season analysis, note that data represents the season in progress
 
-Data Coverage: NWSL seasons 2021-2025, player and team statistics, xG metrics, progressive play data."""
+Data Coverage: 
+- CURRENT SEASON (2025): Live player and team statistics updated regularly
+- HISTORICAL SEASONS (2021-2024): Complete season data
+- Available metrics: xG, progressive play, defensive actions, team performance
+- Data sources: FBref professional statistics, updated after each match week"""
                             )
                         )
                     ]
