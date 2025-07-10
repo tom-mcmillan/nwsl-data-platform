@@ -256,6 +256,105 @@ def handle_initialize(params: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_tools_list() -> Dict[str, Any]:
     """Return list of available tools"""
+    
+    # If using analytics server, get tools from MCP server
+    if SERVER_TYPE == "analytics" and mcp_server:
+        try:
+            # The analytics server uses MCP protocol, so we need to get tools differently
+            # For now, return the research analytics tools if available
+            tools = []
+            
+            # Check if research analytics are available
+            if hasattr(mcp_server, 'xg_calculator') and mcp_server.xg_calculator:
+                tools.extend([
+                    {
+                        "name": "expected_goals_analysis",
+                        "title": "Expected Goals Calculator",
+                        "description": "Analyze expected goals patterns to answer 'What truly generates goals?' Research includes xG efficiency, overperformers, and goal generation patterns. Updated regularly with current 2025 season data.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "analysis_type": {
+                                    "type": "string",
+                                    "enum": ["player_xg", "league_patterns", "overperformers", "team_efficiency"],
+                                    "description": "Type of xG analysis to perform"
+                                },
+                                "season": {"type": "string", "description": "Season year (e.g., '2025', '2024', '2023')"},
+                                "player_name": {"type": "string", "description": "Specific player name (optional)"},
+                                "team": {"type": "string", "description": "Specific team (optional)"},
+                                "min_minutes": {"type": "integer", "default": 450}
+                            },
+                            "required": ["analysis_type", "season"]
+                        }
+                    },
+                    {
+                        "name": "shot_quality_analysis",
+                        "title": "Shot Quality Profiler",
+                        "description": "Analyze shot quality and finishing patterns. Breaks down shooting by volume, quality, position, and conversion rates to understand goal generation. Includes current 2025 season data updated after each match week.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "analysis_type": {
+                                    "type": "string",
+                                    "enum": ["player_profiles", "positional_patterns", "quality_leaders", "team_styles"],
+                                    "description": "Type of shot quality analysis"
+                                },
+                                "season": {"type": "string", "description": "Season year (e.g., '2025', '2024', '2023')"},
+                                "min_minutes": {"type": "integer", "default": 450},
+                                "min_shots": {"type": "number", "default": 2.0}
+                            },
+                            "required": ["analysis_type", "season"]
+                        }
+                    },
+                    {
+                        "name": "replacement_value_analysis",
+                        "title": "Replacement Value Estimator (WAR)",
+                        "description": "Calculate player value above replacement level to answer 'What is replacement level in soccer?' Provides WAR estimates and roster construction analysis. Current 2025 season data enables real-time player valuation.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "analysis_type": {
+                                    "type": "string",
+                                    "enum": ["replacement_baselines", "player_war", "team_construction", "undervalued_players"],
+                                    "description": "Type of replacement value analysis"
+                                },
+                                "season": {"type": "string", "description": "Season year (e.g., '2025', '2024', '2023')"},
+                                "min_minutes": {"type": "integer", "default": 450},
+                                "min_war": {"type": "number", "default": 0.5}
+                            },
+                            "required": ["analysis_type", "season"]
+                        }
+                    },
+                    {
+                        "name": "query_raw_data",
+                        "title": "NWSL Raw Data Query",
+                        "description": "Execute SQL queries against NWSL BigQuery datasets for custom analysis",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "query": {
+                                    "type": "string", 
+                                    "description": "SQL query to execute against NWSL datasets"
+                                },
+                                "dataset": {
+                                    "type": "string",
+                                    "description": "Dataset to query (nwsl_fbref, nwsl_player_stats)",
+                                    "default": "nwsl_fbref"
+                                }
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                ])
+            
+            # Add basic tools that are always available
+            if tools:  # Only add basic tools if research tools are available
+                return {"tools": tools}
+                
+        except Exception as e:
+            print(f"Error getting analytics tools: {e}")
+    
+    # Fall back to basic tools list
     tools = [
         {
             "name": "get_raw_data",
@@ -559,7 +658,15 @@ async def handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
     tool_args = params.get("arguments", {})
     
     # Execute the tool
-    if tool_name == "get_raw_data":
+    if tool_name == "expected_goals_analysis":
+        result = await mcp_server._handle_xg_analysis(tool_args)
+    elif tool_name == "shot_quality_analysis":
+        result = await mcp_server._handle_shot_analysis(tool_args)
+    elif tool_name == "replacement_value_analysis":
+        result = await mcp_server._handle_war_analysis(tool_args)
+    elif tool_name == "query_raw_data":
+        result = await mcp_server._handle_raw_query(tool_args)
+    elif tool_name == "get_raw_data":
         result = await mcp_server._get_raw_data(tool_args)
     elif tool_name == "get_player_stats":
         result = await mcp_server._get_player_stats(tool_args)
