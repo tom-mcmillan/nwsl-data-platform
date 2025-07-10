@@ -46,11 +46,12 @@ make test
 
 ## Features
 
-- Data Ingestion: Automated NWSL data collection from FBref
-- Analytics Engine: Player, team, and league analysis tools
-- Pattern Discovery: ML-powered insight discovery
-- MCP Integration: Model Context Protocol server for AI integration
-- Professional Tooling: Linting, testing, and CI/CD ready
+- **Data Ingestion**: Automated NWSL data collection from FBref API
+- **Raw Data Access**: Direct access to 8 different data types via MCP protocol
+- **Professional Statistics**: xG, possession, passing accuracy, defensive metrics
+- **MCP Integration**: Streamlined Model Context Protocol server for AI integration
+- **Comprehensive Coverage**: 2020-2025 FBref data + 2016-2024 basic match data
+- **Professional Tooling**: Linting, testing, and CI/CD ready
 
 ## Architecture
 
