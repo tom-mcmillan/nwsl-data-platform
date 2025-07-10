@@ -40,26 +40,30 @@ class NWSLAnalyticsServer:
             return [
                 types.Tool(
                     name="get_raw_data",
-                    description="Get raw statistical data - squad stats, player stats, games data, etc.",
+                    title="NWSL Raw Data Access",
+                    description="Get raw statistical data including squad stats, player stats, games data, team info, and professional FBref statistics from NWSL seasons.",
                     inputSchema={
                         "type": "object",
                         "properties": {
                             "data_type": {
                                 "type": "string",
-                                "description": "Type of data: 'squad_stats', 'player_stats', 'games', 'team_info', 'fbref_team_stats', 'fbref_player_stats', 'fbref_matches', 'fbref_player_match_stats'",
+                                "description": "Type of data to retrieve",
                                 "enum": ["squad_stats", "player_stats", "games", "team_info", "fbref_team_stats", "fbref_player_stats", "fbref_matches", "fbref_player_match_stats"]
                             },
                             "season": {
                                 "type": "string",
-                                "description": "Season year (e.g., '2024')"
+                                "description": "Season year (e.g., '2024')",
+                                "pattern": "^20[0-9]{2}$"
                             },
                             "team_id": {
                                 "type": "string",
-                                "description": "Optional: Filter by specific team"
+                                "description": "Optional: Filter by specific team ID"
                             },
                             "limit": {
                                 "type": "integer",
-                                "description": "Optional: Limit number of rows returned (default: 50)"
+                                "description": "Optional: Limit number of rows returned (default: 50)",
+                                "minimum": 1,
+                                "maximum": 1000
                             }
                         },
                         "required": ["data_type", "season"]
