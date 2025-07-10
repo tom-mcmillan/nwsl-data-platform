@@ -72,6 +72,33 @@ async def root():
         ]
     }
 
+@app.post("/deploy-nwsl-data")
+async def deploy_nwsl_data():
+    """Deploy NWSL player and team data to BigQuery"""
+    try:
+        # Import the deployment function
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "scripts"))
+        
+        from deploy_nwsl_data import deploy_nwsl_data_to_bigquery
+        
+        # Run the deployment
+        result = deploy_nwsl_data_to_bigquery()
+        
+        return {
+            "status": "success" if result['success'] else "error",
+            "message": "NWSL data deployment completed",
+            "details": result
+        }
+        
+    except Exception as e:
+        logger.error(f"NWSL data deployment failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Deployment failed: {str(e)}"
+        }
+
 def create_error_response(id: Any, code: int, message: str, data: Any = None) -> Dict:
     """Create a JSON-RPC error response"""
     error = {
