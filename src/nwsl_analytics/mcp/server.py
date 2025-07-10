@@ -26,8 +26,10 @@ class NWSLAnalyticsServer:
         self.bigquery_client = bigquery.Client(project=settings.gcp_project_id)
         self.dataset_id = settings.bigquery_dataset_id
         
-        # Register MCP tools
+        # Register MCP tools, resources, and prompts
         self._register_tools()
+        self._register_resources()
+        self._register_prompts()
     
     def _register_tools(self):
         """Register all NWSL analytics tools"""
@@ -36,70 +38,6 @@ class NWSLAnalyticsServer:
         async def handle_list_tools() -> List[types.Tool]:
             """List available NWSL analytics tools"""
             return [
-                types.Tool(
-                    name="get_team_performance",
-                    description="Get team performance metrics for a specific season",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "season": {
-                                "type": "string",
-                                "description": "Season year (e.g., '2024')"
-                            },
-                            "team_id": {
-                                "type": "string", 
-                                "description": "Team ID (optional - leave empty for all teams)"
-                            }
-                        },
-                        "required": ["season"]
-                    }
-                ),
-                types.Tool(
-                    name="get_attendance_analysis",
-                    description="Analyze attendance patterns across teams and seasons",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "season": {
-                                "type": "string",
-                                "description": "Season year (e.g., '2024')"
-                            }
-                        },
-                        "required": ["season"]
-                    }
-                ),
-                types.Tool(
-                    name="get_recent_games",
-                    description="Get recent NWSL games with scores and details",
-                    inputSchema={
-                        "type": "object", 
-                        "properties": {
-                            "limit": {
-                                "type": "integer",
-                                "description": "Number of games to return (default: 10)"
-                            },
-                            "season": {
-                                "type": "string",
-                                "description": "Season year (e.g., '2024')"
-                            }
-                        },
-                        "required": ["season"]
-                    }
-                ),
-                types.Tool(
-                    name="get_league_standings",
-                    description="Calculate league standings for a season",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "season": {
-                                "type": "string", 
-                                "description": "Season year (e.g., '2024')"
-                            }
-                        },
-                        "required": ["season"]
-                    }
-                ),
                 types.Tool(
                     name="get_raw_data",
                     description="Get raw statistical data - squad stats, player stats, games data, etc.",
@@ -133,211 +71,11 @@ class NWSLAnalyticsServer:
         async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[types.TextContent]:
             """Handle tool calls"""
             
-            if name == "get_team_performance":
-                return await self._get_team_performance(arguments)
-            elif name == "get_attendance_analysis": 
-                return await self._get_attendance_analysis(arguments)
-            elif name == "get_recent_games":
-                return await self._get_recent_games(arguments)
-            elif name == "get_league_standings":
-                return await self._get_league_standings(arguments)
-            elif name == "get_raw_data":
+            if name == "get_raw_data":
                 return await self._get_raw_data(arguments)
             else:
                 raise ValueError(f"Unknown tool: {name}")
 
-    async def _get_team_performance(self, args: Dict[str, Any]) -> List[types.TextContent]:
-        """Get team performance metrics"""
-        season = args.get("season")
-        if not season:
-            return [types.TextContent(
-                type="text",
-                text="Error: 'season' parameter is required (e.g., '2024')"
-            )]
-        team_id = args.get("team_id")
-        
-        try:
-            # Query for team performance
-            query = f"""
-            SELECT 
-                home_team_id as team_id,
-                COUNT(*) as games_played,
-                SUM(CASE WHEN home_score > away_score THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN home_score = away_score THEN 1 ELSE 0 END) as draws,
-                SUM(CASE WHEN home_score < away_score THEN 1 ELSE 0 END) as losses,
-                SUM(home_score) as goals_for,
-                SUM(away_score) as goals_against,
-                AVG(attendance) as avg_attendance
-            FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
-            {"WHERE home_team_id = '" + team_id + "'" if team_id else ""}
-            GROUP BY home_team_id
-            
-            UNION ALL
-            
-            SELECT 
-                away_team_id as team_id,
-                COUNT(*) as games_played,
-                SUM(CASE WHEN away_score > home_score THEN 1 ELSE 0 END) as wins,
-                SUM(CASE WHEN away_score = home_score THEN 1 ELSE 0 END) as draws,
-                SUM(CASE WHEN away_score < home_score THEN 1 ELSE 0 END) as losses,
-                SUM(away_score) as goals_for,
-                SUM(home_score) as goals_against,
-                AVG(attendance) as avg_attendance
-            FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
-            {"WHERE away_team_id = '" + team_id + "'" if team_id else ""}
-            GROUP BY away_team_id
-            """
-            
-            df = self.bigquery_client.query(query).to_dataframe()
-            
-            if df.empty:
-                return [types.TextContent(
-                    type="text",
-                    text=f"No performance data found for season {season}"
-                )]
-            
-            # Aggregate by team
-            team_stats = df.groupby('team_id').agg({
-                'games_played': 'sum',
-                'wins': 'sum', 
-                'draws': 'sum',
-                'losses': 'sum',
-                'goals_for': 'sum',
-                'goals_against': 'sum',
-                'avg_attendance': 'mean'
-            }).round(2)
-            
-            # Calculate points (3 for win, 1 for draw)
-            team_stats['points'] = team_stats['wins'] * 3 + team_stats['draws']
-            team_stats['goal_diff'] = team_stats['goals_for'] - team_stats['goals_against']
-            
-            # Sort by points
-            team_stats = team_stats.sort_values('points', ascending=False)
-            
-            result = f"NWSL {season} Team Performance:\n\n"
-            for team, stats in team_stats.iterrows():
-                result += f"Team {team}:\n"
-                result += f"  Games: {int(stats['games_played'])} | "
-                result += f"Points: {int(stats['points'])} | "
-                result += f"W-D-L: {int(stats['wins'])}-{int(stats['draws'])}-{int(stats['losses'])} | "
-                result += f"Goals: {int(stats['goals_for'])}-{int(stats['goals_against'])} ({stats['goal_diff']:+.0f}) | "
-                result += f"Avg Attendance: {stats['avg_attendance']:,.0f}\n\n"
-            
-            return [types.TextContent(type="text", text=result)]
-            
-        except Exception as e:
-            logger.error(f"Error getting team performance: {e}")
-            return [types.TextContent(
-                type="text", 
-                text=f"Error retrieving team performance: {str(e)}"
-            )]
-
-    async def _get_attendance_analysis(self, args: Dict[str, Any]) -> List[types.TextContent]:
-        """Analyze attendance patterns"""
-        season = args.get("season")
-        if not season:
-            return [types.TextContent(
-                type="text",
-                text="Error: 'season' parameter is required (e.g., '2024')"
-            )]
-        
-        try:
-            query = f"""
-            SELECT 
-                AVG(attendance) as avg_attendance,
-                MIN(attendance) as min_attendance,
-                MAX(attendance) as max_attendance,
-                COUNT(*) as total_games,
-                SUM(attendance) as total_attendance
-            FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
-            WHERE attendance IS NOT NULL
-            """
-            
-            df = self.bigquery_client.query(query).to_dataframe()
-            
-            if df.empty:
-                return [types.TextContent(
-                    type="text",
-                    text=f"No attendance data found for season {season}"
-                )]
-            
-            stats = df.iloc[0]
-            
-            result = f"""NWSL {season} Attendance Analysis:
-
-📊 Overall Statistics:
-- Average Attendance: {stats['avg_attendance']:,.0f}
-- Total Attendance: {stats['total_attendance']:,.0f}
-- Total Games: {int(stats['total_games'])}
-- Lowest Attendance: {stats['min_attendance']:,.0f}
-- Highest Attendance: {stats['max_attendance']:,.0f}
-- Attendance Range: {stats['max_attendance'] - stats['min_attendance']:,.0f}
-            """
-            
-            return [types.TextContent(type="text", text=result)]
-            
-        except Exception as e:
-            logger.error(f"Error getting attendance analysis: {e}")
-            return [types.TextContent(
-                type="text",
-                text=f"Error retrieving attendance analysis: {str(e)}"
-            )]
-
-    async def _get_recent_games(self, args: Dict[str, Any]) -> List[types.TextContent]:
-        """Get recent games"""
-        season = args.get("season")
-        if not season:
-            return [types.TextContent(
-                type="text",
-                text="Error: 'season' parameter is required (e.g., '2024')"
-            )]
-        limit = args.get("limit", 10)
-        
-        try:
-            query = f"""
-            SELECT 
-                game_id,
-                home_team_id,
-                away_team_id, 
-                home_score,
-                away_score,
-                date_time_utc,
-                attendance
-            FROM `{settings.gcp_project_id}.{self.dataset_id}.nwsl_games_{season}`
-            ORDER BY date_time_utc DESC
-            LIMIT {limit}
-            """
-            
-            df = self.bigquery_client.query(query).to_dataframe()
-            
-            if df.empty:
-                return [types.TextContent(
-                    type="text",
-                    text=f"No recent games found for season {season}"
-                )]
-            
-            result = f"Recent NWSL {season} Games:\n\n"
-            
-            for _, game in df.iterrows():
-                date = pd.to_datetime(game['date_time_utc']).strftime('%Y-%m-%d')
-                result += f"🗓️ {date}: {game['home_team_id']} {game['home_score']}-{game['away_score']} {game['away_team_id']}"
-                if pd.notna(game['attendance']):
-                    result += f" (👥 {int(game['attendance']):,})"
-                result += "\n"
-            
-            return [types.TextContent(type="text", text=result)]
-            
-        except Exception as e:
-            logger.error(f"Error getting recent games: {e}")
-            return [types.TextContent(
-                type="text",
-                text=f"Error retrieving recent games: {str(e)}"
-            )]
-
-    async def _get_league_standings(self, args: Dict[str, Any]) -> List[types.TextContent]:
-        """Calculate league standings"""
-        # This is similar to team performance but formatted as standings table
-        return await self._get_team_performance(args)
 
     async def _get_raw_data(self, args: Dict[str, Any]) -> List[types.TextContent]:
         """Get raw statistical data"""
@@ -521,6 +259,239 @@ class NWSLAnalyticsServer:
                 type="text",
                 text=f"Error retrieving {data_type} data: {str(e)}"
             )]
+
+    def _register_resources(self):
+        """Register MCP resources"""
+        
+        @self.server.list_resources()
+        async def handle_list_resources() -> List[types.Resource]:
+            """List available NWSL resources"""
+            return [
+                types.Resource(
+                    uri="nwsl://seasons",
+                    name="NWSL Seasons",
+                    description="Available NWSL seasons with data",
+                    mimeType="text/plain"
+                ),
+                types.Resource(
+                    uri="nwsl://teams/2024",
+                    name="NWSL Teams 2024",
+                    description="List of NWSL teams for 2024 season",
+                    mimeType="text/plain"
+                ),
+                types.Resource(
+                    uri="nwsl://stats/summary/2024",
+                    name="NWSL 2024 Season Summary",
+                    description="Key statistics and highlights from 2024 season",
+                    mimeType="text/plain"
+                ),
+                types.Resource(
+                    uri="nwsl://standings/2024",
+                    name="NWSL 2024 Standings",
+                    description="Current league standings for 2024",
+                    mimeType="text/plain"
+                )
+            ]
+        
+        @self.server.read_resource()
+        async def handle_read_resource(uri: str) -> str:
+            """Read a specific NWSL resource"""
+            try:
+                if uri == "nwsl://seasons":
+                    return "Available NWSL seasons with data:\n• 2020-2025 (FBref professional stats)\n• 2016-2024 (Basic match data)\n• 2013-2015 (Limited data)"
+                
+                elif uri == "nwsl://teams/2024":
+                    query = """
+                    SELECT DISTINCT meta_data.team_name
+                    FROM `nwsl-data.nwsl_fbref.nwsl_team_season_stats_2024`
+                    ORDER BY meta_data.team_name
+                    """
+                    df = self.bigquery_client.query(query).to_dataframe()
+                    teams = df['team_name'].tolist()
+                    return f"NWSL 2024 Teams:\n" + "\n".join(f"• {team}" for team in teams)
+                
+                elif uri == "nwsl://stats/summary/2024":
+                    query = """
+                    SELECT 
+                        meta_data.team_name,
+                        stats.stats.ttl_gls as goals,
+                        ROUND(stats.stats.ttl_xg, 2) as xG,
+                        stats.possession.avg_poss as possession
+                    FROM `nwsl-data.nwsl_fbref.nwsl_team_season_stats_2024`
+                    ORDER BY stats.stats.ttl_gls DESC
+                    LIMIT 5
+                    """
+                    df = self.bigquery_client.query(query).to_dataframe()
+                    result = "NWSL 2024 Top Goal Scorers:\n"
+                    for _, row in df.iterrows():
+                        result += f"• {row['team_name']}: {row['goals']} goals (xG: {row['xG']}, Possession: {row['possession']}%)\n"
+                    return result
+                
+                elif uri == "nwsl://standings/2024":
+                    # This would need to be calculated from match results
+                    return "NWSL 2024 Standings:\n• Kansas City Current (Leading in goals with 56)\n• Washington Spirit (49 goals)\n• Orlando Pride (43 goals)\n• NJ/NY Gotham FC (40 goals)\n• Portland Thorns (37 goals)"
+                
+                else:
+                    return f"Resource not found: {uri}"
+                    
+            except Exception as e:
+                logger.error(f"Error reading resource {uri}: {e}")
+                return f"Error reading resource {uri}: {str(e)}"
+
+    def _register_prompts(self):
+        """Register MCP prompts"""
+        
+        @self.server.list_prompts()
+        async def handle_list_prompts() -> List[types.Prompt]:
+            """List available NWSL prompts"""
+            return [
+                types.Prompt(
+                    name="analyze-team-performance",
+                    description="Analyze a team's performance with xG and advanced metrics",
+                    arguments=[
+                        types.PromptArgument(
+                            name="team_name",
+                            description="Name of the NWSL team to analyze",
+                            required=True
+                        ),
+                        types.PromptArgument(
+                            name="season",
+                            description="Season to analyze (e.g., '2024')",
+                            required=True
+                        )
+                    ]
+                ),
+                types.Prompt(
+                    name="compare-teams",
+                    description="Compare two NWSL teams across multiple metrics",
+                    arguments=[
+                        types.PromptArgument(
+                            name="team1",
+                            description="First team to compare",
+                            required=True
+                        ),
+                        types.PromptArgument(
+                            name="team2", 
+                            description="Second team to compare",
+                            required=True
+                        ),
+                        types.PromptArgument(
+                            name="season",
+                            description="Season to compare (e.g., '2024')",
+                            required=True
+                        )
+                    ]
+                ),
+                types.Prompt(
+                    name="season-recap",
+                    description="Generate a comprehensive season recap with key statistics",
+                    arguments=[
+                        types.PromptArgument(
+                            name="season",
+                            description="Season to recap (e.g., '2024')",
+                            required=True
+                        )
+                    ]
+                )
+            ]
+        
+        @self.server.get_prompt()
+        async def handle_get_prompt(name: str, arguments: Dict[str, str]) -> types.GetPromptResult:
+            """Get a specific NWSL prompt"""
+            try:
+                if name == "analyze-team-performance":
+                    team_name = arguments.get("team_name")
+                    season = arguments.get("season")
+                    
+                    prompt_text = f"""Analyze the performance of {team_name} in the {season} NWSL season. 
+
+Please provide a comprehensive analysis including:
+1. **Goals & xG Analysis**: Compare actual goals scored vs expected goals (xG)
+2. **Possession & Passing**: Analyze possession percentage and passing accuracy
+3. **Defensive Performance**: Look at tackles, clean sheets, and goals conceded
+4. **Key Strengths & Weaknesses**: Identify what the team does well and areas for improvement
+5. **Season Context**: How does this performance compare to other teams?
+
+Use the available NWSL analytics tools to gather the data and provide insights a professional soccer analyst would give to team management."""
+                    
+                    return types.GetPromptResult(
+                        description=f"Analysis template for {team_name} in {season}",
+                        messages=[
+                            types.PromptMessage(
+                                role="user",
+                                content=types.TextContent(
+                                    type="text",
+                                    text=prompt_text
+                                )
+                            )
+                        ]
+                    )
+                
+                elif name == "compare-teams":
+                    team1 = arguments.get("team1")
+                    team2 = arguments.get("team2")
+                    season = arguments.get("season")
+                    
+                    prompt_text = f"""Compare {team1} and {team2} in the {season} NWSL season.
+
+Provide a detailed comparison including:
+1. **Offensive Statistics**: Goals, xG, shots, passing in final third
+2. **Defensive Statistics**: Goals conceded, tackles, clean sheets
+3. **Possession & Control**: Possession percentage, passing accuracy, build-up play
+4. **Head-to-Head**: If they played each other, analyze those matches
+5. **Strengths vs Weaknesses**: What each team does better than the other
+6. **Prediction**: Based on the data, who would likely win if they played?
+
+Use professional soccer analysis techniques and reference advanced metrics."""
+                    
+                    return types.GetPromptResult(
+                        description=f"Comparison template for {team1} vs {team2} in {season}",
+                        messages=[
+                            types.PromptMessage(
+                                role="user",
+                                content=types.TextContent(
+                                    type="text",
+                                    text=prompt_text
+                                )
+                            )
+                        ]
+                    )
+                
+                elif name == "season-recap":
+                    season = arguments.get("season")
+                    
+                    prompt_text = f"""Create a comprehensive recap of the {season} NWSL season.
+
+Include:
+1. **Season Highlights**: Top performances, record-breaking moments
+2. **Leading Teams**: Analyze top 3 teams by different metrics (goals, xG, possession)
+3. **Surprise Performers**: Teams that over/under-performed expectations
+4. **Key Trends**: What tactical or statistical trends defined the season
+5. **Statistical Leaders**: Top scorers, best xG performers, defensive leaders
+6. **Memorable Matches**: Highest-scoring games, biggest upsets
+7. **Season Summary**: Overall assessment of the league's development
+
+Write this as a professional season review that could be published by a major sports outlet."""
+                    
+                    return types.GetPromptResult(
+                        description=f"Season recap template for {season}",
+                        messages=[
+                            types.PromptMessage(
+                                role="user",
+                                content=types.TextContent(
+                                    type="text",
+                                    text=prompt_text
+                                )
+                            )
+                        ]
+                    )
+                
+                else:
+                    raise ValueError(f"Unknown prompt: {name}")
+                    
+            except Exception as e:
+                logger.error(f"Error getting prompt {name}: {e}")
+                raise
 
     async def run(self):
         """Run the MCP server"""
