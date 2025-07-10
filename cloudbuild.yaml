@@ -48,6 +48,18 @@ steps:
       - '--port'
       - '8080'
 
+  # Set public access permissions
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'services'
+      - 'add-iam-policy-binding'
+      - 'nwsl-analytics-mcp'
+      - '--region=us-central1'
+      - '--member=allUsers'
+      - '--role=roles/run.invoker'
+
 # Configure Cloud Build options
 options:
   machineType: 'E2_HIGHCPU_8'
