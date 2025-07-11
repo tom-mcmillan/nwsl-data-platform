@@ -85,7 +85,7 @@ class ReplacementValueEstimator:
             (PERF_G_plus_A * 0.8 + EXP_npxG_plus_xAG * 0.2) / NULLIF(PT_90s, 0) as contribution_per_90
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' 
+          WHERE season = {int(season)} 
             AND PT_Min >= {min_minutes}
             AND Pos NOT LIKE '%GK%' OR Pos LIKE '%GK%'  -- Include all positions
         ),
@@ -216,7 +216,7 @@ class ReplacementValueEstimator:
             (PERF_G_plus_A * 0.7 + EXP_npxG_plus_xAG * 0.3) / NULLIF(PT_90s, 0) as weighted_contribution_per_90
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' 
+          WHERE season = {int(season)} 
             AND PT_Min >= {min_minutes}
             AND Pos IS NOT NULL
         )

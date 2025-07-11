@@ -102,7 +102,7 @@ class ShotQualityProfiler:
             END as finishing_quality
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' AND PT_Min >= {min_minutes}
+          WHERE season = {int(season)} AND PT_Min >= {min_minutes}
         )
         
         SELECT *,
@@ -166,7 +166,7 @@ class ShotQualityProfiler:
             COUNT(CASE WHEN PERF_Gls / NULLIF(EXP_xG, 0) >= 1.2 THEN 1 END) as clinical_finishers
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' 
+          WHERE season = {int(season)} 
             AND PT_Min >= 450
             AND EXP_xG > 0
           GROUP BY position_group
@@ -258,7 +258,7 @@ class ShotQualityProfiler:
             END as performance_vs_expected
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' 
+          WHERE season = {int(season)} 
             AND PT_Min >= 450
             AND EXP_xG >= {min_shots}  -- Minimum total xG threshold
         )
@@ -313,7 +313,7 @@ class ShotQualityProfiler:
             SUM(PERF_Gls) / SUM(PT_Min) * 90 as team_goals_per_90_weighted
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' 
+          WHERE season = {int(season)} 
             AND Squad IS NOT NULL
             AND PT_Min >= 90  -- At least 1 match worth
           GROUP BY Squad

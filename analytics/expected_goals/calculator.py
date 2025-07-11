@@ -44,7 +44,9 @@ class ExpectedGoalsCalculator:
         if player_name:
             where_conditions.append(f"Player LIKE '%{player_name}%'")
         if season:
-            where_conditions.append(f"season = '{season}'")
+            # Convert season to integer for BigQuery compatibility
+            season_int = int(season) if isinstance(season, str) else season
+            where_conditions.append(f"season = {season_int}")
         if team:
             # Handle both full names and short names
             if team.lower() in ['north carolina courage', 'nc courage', 'courage']:
@@ -149,7 +151,7 @@ class ExpectedGoalsCalculator:
             MAX(P90_xG) as max_xg_per_90
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' AND PT_Min >= 450  -- Min 5 matches worth
+          WHERE season = {int(season)} AND PT_Min >= 450  -- Min 5 matches worth
         ),
         
         position_analysis AS (
@@ -170,7 +172,7 @@ class ExpectedGoalsCalculator:
             SUM(EXP_xG) as total_xg
             
           FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-          WHERE season = '{season}' AND PT_Min >= 450
+          WHERE season = {int(season)} AND PT_Min >= 450
           GROUP BY position_group
         )
         
@@ -267,7 +269,7 @@ class ExpectedGoalsCalculator:
           END as performance_category
           
         FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-        WHERE season = '{season}' 
+        WHERE season = {int(season)} 
           AND PT_Min >= {min_minutes}
           AND EXP_xG > 0.5  -- Minimum threshold for meaningful analysis
         ORDER BY goals_vs_expected DESC
@@ -313,7 +315,7 @@ class ExpectedGoalsCalculator:
           STDDEV(PT_Min) as minutes_distribution_std
           
         FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-        WHERE season = '{season}' AND Squad IS NOT NULL
+        WHERE season = {int(season)} AND Squad IS NOT NULL
         GROUP BY Squad
         ORDER BY total_xg DESC
         """
