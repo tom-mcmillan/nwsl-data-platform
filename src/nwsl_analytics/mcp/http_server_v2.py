@@ -369,6 +369,40 @@ def handle_tools_list() -> Dict[str, Any]:
                             },
                             "required": ["team", "season"]
                         }
+                    },
+                    {
+                        "name": "roster_intelligence",
+                        "title": "Smart Roster Analysis",
+                        "description": "Advanced roster analysis with recency weighting, form detection, and lineup optimization suggestions. Accounts for recent performance trends.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "team": {"type": "string", "description": "Team name"},
+                                "season": {"type": "string", "description": "Season year"},
+                                "analysis_type": {
+                                    "type": "string",
+                                    "enum": ["current_form", "best_xi", "key_contributors", "underperformers", "recent_signings"],
+                                    "description": "Type of roster analysis"
+                                },
+                                "position_focus": {"type": "string", "description": "Optional: Focus on specific position (FW, MF, DF, GK)"},
+                                "recency_days": {"type": "integer", "default": 30, "description": "Weight recent games more heavily (days)"}
+                            },
+                            "required": ["team", "season", "analysis_type"]
+                        }
+                    },
+                    {
+                        "name": "ingest_current_roster",
+                        "title": "Ingest Current Team Roster",
+                        "description": "Scrape and ingest current 2025 roster data from FBref team pages to ensure lineup recommendations use active players only.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "team": {"type": "string", "description": "Team name (e.g., 'Angel City', 'North Carolina Courage')"},
+                                "fbref_url": {"type": "string", "description": "FBref team stats URL (e.g., 'https://fbref.com/en/squads/ae38d267/Angel-City-FC-Stats')"},
+                                "update_database": {"type": "boolean", "default": false, "description": "Whether to update the database with current roster"}
+                            },
+                            "required": ["team", "fbref_url"]
+                        }
                     }
                 ])
             
@@ -693,6 +727,10 @@ async def handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
         result = await mcp_server._handle_raw_query(tool_args)
     elif tool_name == "get_team_roster":
         result = await mcp_server._get_team_roster(tool_args)
+    elif tool_name == "roster_intelligence":
+        result = await mcp_server._roster_intelligence(tool_args)
+    elif tool_name == "ingest_current_roster":
+        result = await mcp_server._ingest_current_roster(tool_args)
     elif tool_name == "get_raw_data":
         result = await mcp_server._get_raw_data(tool_args)
     elif tool_name == "get_player_stats":

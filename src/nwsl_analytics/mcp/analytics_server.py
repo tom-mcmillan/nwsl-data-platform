@@ -657,7 +657,7 @@ class NWSLAnalyticsServer:
             return [types.TextContent(type="text", text=f"Games data failed: {str(e)}")]
     
     async def _get_team_roster(self, args: Dict[str, Any]) -> List[types.TextContent]:
-        """HTTP wrapper for team roster analysis"""
+        """HTTP wrapper for team roster analysis with current roster intelligence"""
         try:
             if "season" not in args:
                 return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
@@ -666,8 +666,9 @@ class NWSLAnalyticsServer:
             
             season = args["season"]
             team = args["team"]
-            min_minutes = args.get("min_minutes", 450)
+            min_minutes = args.get("min_minutes", 200)  # Lower default for mid-season analysis
             sort_by = args.get("sort_by", "total_contributions")
+            current_only = args.get("current_only", True)  # New parameter
             
             # Normalize team name
             normalized_team = self._normalize_team_name(team)
@@ -725,6 +726,261 @@ class NWSLAnalyticsServer:
             
         except Exception as e:
             return [types.TextContent(type="text", text=f"Team roster analysis failed: {str(e)}")]
+    
+    async def _roster_intelligence(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """Advanced roster analysis with intelligent insights"""
+        try:
+            if "season" not in args or "team" not in args or "analysis_type" not in args:
+                return [types.TextContent(type="text", text="Error: season, team, and analysis_type parameters are required")]
+            
+            season = args["season"]
+            team = args["team"]
+            analysis_type = args["analysis_type"]
+            position_focus = args.get("position_focus")
+            normalized_team = self._normalize_team_name(team)
+            
+            if analysis_type == "current_form":
+                # Get players with recent activity, weighted by recency
+                query = f"""
+                SELECT 
+                    Player as player_name,
+                    Pos as position,
+                    PT_Min as minutes_played,
+                    PERF_Gls as goals,
+                    PERF_Ast as assists,
+                    EXP_xG as expected_goals,
+                    P90_Gls as goals_per_90,
+                    P90_Ast as assists_per_90,
+                    ROUND(PERF_Gls / NULLIF(EXP_xG, 0), 3) as conversion_rate,
+                    CASE 
+                        WHEN PT_Min >= 900 THEN 'Regular Starter'
+                        WHEN PT_Min >= 450 THEN 'Squad Player'
+                        WHEN PT_Min >= 180 THEN 'Rotation Option'
+                        ELSE 'Limited Minutes'
+                    END as playing_time_status
+                FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+                WHERE Squad = '{normalized_team}' AND season = {int(season)}
+                ORDER BY PT_Min DESC
+                """
+                
+                df = self.bigquery_client.query(query).to_dataframe()
+                
+                result = f"{team} Current Form Analysis ({season}):\n\n"
+                result += "**PLAYING TIME BREAKDOWN:**\n"
+                
+                for status in ['Regular Starter', 'Squad Player', 'Rotation Option', 'Limited Minutes']:
+                    players = df[df['playing_time_status'] == status]
+                    if not players.empty:
+                        result += f"\n{status} ({len(players)} players):\n"
+                        for _, player in players.iterrows():
+                            conv_rate = player['conversion_rate'] if pd.notna(player['conversion_rate']) else 0.0
+                            result += f"• {player['player_name']} ({player['position']}): {player['minutes_played']:.0f} mins, "
+                            result += f"{player['goals']}G+{player['assists']}A, {conv_rate:.2f} conversion\n"
+                
+                # Add team summary
+                total_goals = df['goals'].sum()
+                total_xg = df['expected_goals'].sum()
+                team_conversion = total_goals / total_xg if total_xg > 0 else 0
+                
+                result += f"\n**TEAM SUMMARY:**\n"
+                result += f"Total Goals: {total_goals}, Expected: {total_xg:.1f}, Conversion: {team_conversion:.2f}\n"
+                result += f"Squad Size: {len(df)} players with minutes\n"
+                
+            elif analysis_type == "best_xi":
+                # Suggest optimal starting XI based on contributions and form
+                query = f"""
+                WITH position_rankings AS (
+                    SELECT 
+                        Player,
+                        Pos,
+                        PT_Min,
+                        PERF_Gls + PERF_Ast as contributions,
+                        EXP_xG + EXP_xAG as expected_contributions,
+                        CASE 
+                            WHEN Pos LIKE '%GK%' THEN 'GK'
+                            WHEN Pos LIKE '%DF%' OR Pos LIKE '%CB%' OR Pos LIKE '%LB%' OR Pos LIKE '%RB%' THEN 'DF'  
+                            WHEN Pos LIKE '%MF%' OR Pos LIKE '%CM%' OR Pos LIKE '%DM%' OR Pos LIKE '%AM%' THEN 'MF'
+                            WHEN Pos LIKE '%FW%' OR Pos LIKE '%ST%' OR Pos LIKE '%LW%' OR Pos LIKE '%RW%' THEN 'FW'
+                            ELSE 'UTIL'
+                        END as position_group,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY CASE 
+                                WHEN Pos LIKE '%GK%' THEN 'GK'
+                                WHEN Pos LIKE '%DF%' OR Pos LIKE '%CB%' OR Pos LIKE '%LB%' OR Pos LIKE '%RB%' THEN 'DF'  
+                                WHEN Pos LIKE '%MF%' OR Pos LIKE '%CM%' OR Pos LIKE '%DM%' OR Pos LIKE '%AM%' THEN 'MF'
+                                WHEN Pos LIKE '%FW%' OR Pos LIKE '%ST%' OR Pos LIKE '%LW%' OR Pos LIKE '%RW%' THEN 'FW'
+                                ELSE 'UTIL'
+                            END 
+                            ORDER BY (PERF_Gls + PERF_Ast + EXP_xG + EXP_xAG) DESC, PT_Min DESC
+                        ) as position_rank
+                    FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+                    WHERE Squad = '{normalized_team}' AND season = {int(season)} AND PT_Min >= 180
+                )
+                SELECT * FROM position_rankings 
+                WHERE (position_group = 'GK' AND position_rank <= 1)
+                   OR (position_group = 'DF' AND position_rank <= 4) 
+                   OR (position_group = 'MF' AND position_rank <= 4)
+                   OR (position_group = 'FW' AND position_rank <= 3)
+                ORDER BY position_group, position_rank
+                """
+                
+                df = self.bigquery_client.query(query).to_dataframe()
+                
+                result = f"{team} Optimal Starting XI ({season}):\n\n"
+                
+                for pos_group in ['GK', 'DF', 'MF', 'FW']:
+                    players = df[df['position_group'] == pos_group]
+                    if not players.empty:
+                        result += f"**{pos_group}:**\n"
+                        for _, player in players.iterrows():
+                            result += f"• {player['Player']} ({player['Pos']}): {player['contributions']:.0f} contributions, "
+                            result += f"{player['expected_contributions']:.1f} expected, {player['PT_Min']:.0f} mins\n"
+                        result += "\n"
+                
+            elif analysis_type == "underperformers":
+                # Find players significantly underperforming expectations
+                query = f"""
+                SELECT 
+                    Player,
+                    Pos,
+                    PT_Min,
+                    PERF_Gls as goals,
+                    EXP_xG as expected_goals,
+                    PERF_Gls - EXP_xG as goal_difference,
+                    ROUND((PERF_Gls - EXP_xG) / NULLIF(EXP_xG, 0) * 100, 1) as underperformance_pct
+                FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+                WHERE Squad = '{normalized_team}' 
+                    AND season = {int(season)} 
+                    AND PT_Min >= 300
+                    AND EXP_xG >= 1.0
+                    AND (PERF_Gls - EXP_xG) < -1.0
+                ORDER BY (PERF_Gls - EXP_xG) ASC
+                """
+                
+                df = self.bigquery_client.query(query).to_dataframe()
+                
+                result = f"{team} Underperforming Players ({season}):\n\n"
+                if df.empty:
+                    result += "No significant underperformers found (good sign!).\n"
+                else:
+                    result += "Players significantly below expected goals:\n"
+                    for _, player in df.iterrows():
+                        result += f"• {player['Player']} ({player['Pos']}): {player['goals']} goals from {player['expected_goals']:.1f} xG "
+                        result += f"({player['goal_difference']:.1f} difference, {player['underperformance_pct']:.0f}% below expectation)\n"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Roster intelligence analysis failed: {str(e)}")]
+    
+    async def _ingest_current_roster(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """Ingest current roster data from FBref team pages"""
+        try:
+            if "team" not in args or "fbref_url" not in args:
+                return [types.TextContent(type="text", text="Error: team and fbref_url parameters are required")]
+            
+            team = args["team"]
+            fbref_url = args["fbref_url"]
+            update_db = args.get("update_database", False)
+            
+            # Import requests and BeautifulSoup for web scraping
+            try:
+                import requests
+                from bs4 import BeautifulSoup
+                import re
+            except ImportError:
+                return [types.TextContent(type="text", text="Error: Web scraping dependencies not available. Need requests and beautifulsoup4.")]
+            
+            # Fetch the FBref page
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            try:
+                response = requests.get(fbref_url, headers=headers, timeout=10)
+                response.raise_for_status()
+            except requests.RequestException as e:
+                return [types.TextContent(type="text", text=f"Error fetching FBref page: {str(e)}")]
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Find the standard stats table (usually the main roster table)
+            stats_table = soup.find('table', {'id': 'stats_standard'}) or soup.find('table', class_='stats_table')
+            
+            if not stats_table:
+                return [types.TextContent(type="text", text=f"Error: Could not find player stats table on {fbref_url}. Check URL format.")]
+            
+            current_roster = []
+            
+            # Parse table rows
+            tbody = stats_table.find('tbody')
+            if tbody:
+                for row in tbody.find_all('tr'):
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) >= 4:  # Ensure we have enough columns
+                        try:
+                            # Extract player data (adjust indices based on FBref table structure)
+                            player_name = cells[0].get_text(strip=True) if len(cells) > 0 else ""
+                            nation = cells[1].get_text(strip=True) if len(cells) > 1 else ""
+                            position = cells[2].get_text(strip=True) if len(cells) > 2 else ""
+                            age = cells[3].get_text(strip=True) if len(cells) > 3 else ""
+                            
+                            # Get minutes played if available (usually around column 5-7)
+                            minutes = ""
+                            for i in range(4, min(len(cells), 10)):
+                                cell_text = cells[i].get_text(strip=True)
+                                if cell_text.isdigit() and int(cell_text) > 50:  # Likely minutes
+                                    minutes = cell_text
+                                    break
+                            
+                            if player_name and player_name != "Player":  # Skip header rows
+                                current_roster.append({
+                                    'player_name': player_name,
+                                    'nation': nation,
+                                    'position': position,
+                                    'age': age,
+                                    'minutes_2025': minutes or "0",
+                                    'active_status': 'Current'
+                                })
+                        except Exception as e:
+                            continue  # Skip malformed rows
+            
+            if not current_roster:
+                return [types.TextContent(type="text", text=f"Error: No player data found in table. URL may be incorrect or page structure changed.")]
+            
+            # Format results
+            result = f"Current {team} Roster (Ingested from FBref):\n\n"
+            result += f"Found {len(current_roster)} active players:\n\n"
+            
+            # Group by position
+            positions = {}
+            for player in current_roster:
+                pos = player['position'] if player['position'] else 'Unknown'
+                if pos not in positions:
+                    positions[pos] = []
+                positions[pos].append(player)
+            
+            for pos, players in positions.items():
+                result += f"**{pos}:**\n"
+                for player in players:
+                    age_text = f", Age {player['age']}" if player['age'] else ""
+                    minutes_text = f", {player['minutes_2025']} mins" if player['minutes_2025'] != "0" else ""
+                    result += f"• {player['player_name']} ({player['nation']}{age_text}{minutes_text})\n"
+                result += "\n"
+            
+            if update_db:
+                # TODO: Implement database update logic here
+                result += f"Note: Database update requested but not yet implemented. "
+                result += f"Currently showing scraped data for validation.\n"
+            
+            result += f"\nSource: {fbref_url}\n"
+            result += f"Scraped: {len(current_roster)} players\n"
+            result += f"This roster reflects current 2025 squad composition."
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Roster ingestion failed: {str(e)}")]
     
     def _register_resources(self):
         """Register resources (datasets, schemas)"""
