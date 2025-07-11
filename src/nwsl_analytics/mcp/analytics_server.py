@@ -411,7 +411,7 @@ class NWSLAnalyticsServer:
             SELECT player_name, team, goals, assists, minutes_played, 
                    expected_goals, expected_assists, shots_on_target_pct
             FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-            WHERE season = '{season}'
+            WHERE season = {int(season)}
             """
             
             if player_name:
@@ -448,7 +448,7 @@ class NWSLAnalyticsServer:
                    SUM(expected_goals) as total_xg,
                    COUNT(*) as squad_size
             FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-            WHERE season = '{season}'
+            WHERE season = {int(season)}
             """
             
             if team_name:
@@ -481,7 +481,7 @@ class NWSLAnalyticsServer:
                    SUM(goals) as goals_for,
                    COUNT(*) as games_played
             FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-            WHERE season = '{season}'
+            WHERE season = {int(season)}
             GROUP BY team
             ORDER BY goals_for DESC
             """
@@ -546,7 +546,7 @@ class NWSLAnalyticsServer:
                 CORR(assists, expected_assists) as assists_xa_correlation,
                 COUNT(*) as sample_size
             FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
-            WHERE season = '{season}' AND minutes_played > 450
+            WHERE season = {int(season)} AND minutes_played > 450
             """
             
             df = self.bigquery_client.query(query).to_dataframe()

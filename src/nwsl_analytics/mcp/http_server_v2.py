@@ -81,10 +81,11 @@ async def root():
             "tools", "resources", "prompts"
         ],
         "data_available": [
+            "LIVE 2025 NWSL season data (current season in progress)",
             "FBref professional statistics (2020-2025)",
-            "Complete NWSL player roster (1,016 players, 2016-2024)",
+            "Complete NWSL player roster (1,016 players, 2016-2025)",
             "NWSL team information (17 teams)",
-            "Match data (686 games, 2021-2024)",
+            "Match data (686 games, 2021-2025)",
             "xG, possession, passing accuracy, defensive stats"
         ]
     }
@@ -277,7 +278,7 @@ def handle_tools_list() -> Dict[str, Any]:
                     {
                         "name": "expected_goals_analysis",
                         "title": "Expected Goals Calculator",
-                        "description": "Analyze expected goals patterns to answer 'What truly generates goals?' Research includes xG efficiency, overperformers, and goal generation patterns. Updated regularly with current 2025 season data.",
+                        "description": "Analyze expected goals patterns for the LIVE 2025 NWSL season and historical data. Research includes xG efficiency, overperformers, and goal generation patterns. The 2025 season is currently in progress with real-time data updates.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -297,7 +298,7 @@ def handle_tools_list() -> Dict[str, Any]:
                     {
                         "name": "shot_quality_analysis",
                         "title": "Shot Quality Profiler",
-                        "description": "Analyze shot quality and finishing patterns. Breaks down shooting by volume, quality, position, and conversion rates to understand goal generation. Includes current 2025 season data updated after each match week.",
+                        "description": "Analyze shot quality and finishing patterns for the LIVE 2025 NWSL season and historical data. Breaks down shooting by volume, quality, position, and conversion rates. The 2025 season is in progress with real-time updates after each match week.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -316,7 +317,7 @@ def handle_tools_list() -> Dict[str, Any]:
                     {
                         "name": "replacement_value_analysis",
                         "title": "Replacement Value Estimator (WAR)",
-                        "description": "Calculate player value above replacement level to answer 'What is replacement level in soccer?' Provides WAR estimates and roster construction analysis. Current 2025 season data enables real-time player valuation.",
+                        "description": "Calculate player value above replacement level for the LIVE 2025 NWSL season and historical data. Provides WAR estimates and roster construction analysis. The 2025 season is currently in progress, enabling real-time player valuation and roster analysis.",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
