@@ -351,6 +351,24 @@ def handle_tools_list() -> Dict[str, Any]:
                             },
                             "required": ["query"]
                         }
+                    },
+                    {
+                        "name": "get_team_roster",
+                        "title": "Team Roster Analysis",
+                        "description": "Get detailed player-by-player stats for a specific team, perfect for lineup optimization and player analysis.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "team": {
+                                    "type": "string",
+                                    "description": "Team name (e.g., 'Courage', 'Current', 'Spirit')"
+                                },
+                                "season": {"type": "string", "description": "Season year (e.g., '2025', '2024', '2023')"},
+                                "min_minutes": {"type": "integer", "default": 450, "description": "Minimum minutes played to include player"},
+                                "sort_by": {"type": "string", "default": "total_contributions", "enum": ["total_contributions", "goals", "assists", "expected_goals", "minutes_played"], "description": "How to sort players"}
+                            },
+                            "required": ["team", "season"]
+                        }
                     }
                 ])
             
@@ -673,6 +691,8 @@ async def handle_tools_call(params: Dict[str, Any]) -> Dict[str, Any]:
         result = await mcp_server._handle_war_analysis(tool_args)
     elif tool_name == "query_raw_data":
         result = await mcp_server._handle_raw_query(tool_args)
+    elif tool_name == "get_team_roster":
+        result = await mcp_server._get_team_roster(tool_args)
     elif tool_name == "get_raw_data":
         result = await mcp_server._get_raw_data(tool_args)
     elif tool_name == "get_player_stats":

@@ -656,6 +656,76 @@ class NWSLAnalyticsServer:
         except Exception as e:
             return [types.TextContent(type="text", text=f"Games data failed: {str(e)}")]
     
+    async def _get_team_roster(self, args: Dict[str, Any]) -> List[types.TextContent]:
+        """HTTP wrapper for team roster analysis"""
+        try:
+            if "season" not in args:
+                return [types.TextContent(type="text", text="Error: Season parameter is required. Please specify a season (e.g., '2025', '2024', '2023')")]
+            if "team" not in args:
+                return [types.TextContent(type="text", text="Error: Team parameter is required. Please specify a team name (e.g., 'Courage', 'Current', 'Spirit')")]
+            
+            season = args["season"]
+            team = args["team"]
+            min_minutes = args.get("min_minutes", 450)
+            sort_by = args.get("sort_by", "total_contributions")
+            
+            # Normalize team name
+            normalized_team = self._normalize_team_name(team)
+            
+            # Map sort_by to actual column names
+            sort_mapping = {
+                "total_contributions": "(PERF_Gls + PERF_Ast)",
+                "goals": "PERF_Gls",
+                "assists": "PERF_Ast", 
+                "expected_goals": "EXP_xG",
+                "minutes_played": "PT_Min"
+            }
+            sort_column = sort_mapping.get(sort_by, "(PERF_Gls + PERF_Ast)")
+            
+            query = f"""
+            SELECT 
+                Player as player_name,
+                Pos as position,
+                PT_Min as minutes_played,
+                PERF_Gls as goals,
+                PERF_Ast as assists,
+                EXP_xG as expected_goals,
+                EXP_xAG as expected_assists,
+                P90_Gls as goals_per_90,
+                P90_Ast as assists_per_90,
+                (PERF_Gls + PERF_Ast) as total_contributions,
+                ROUND(PERF_Gls / NULLIF(EXP_xG, 0), 2) as goal_conversion_rate,
+                ROUND(EXP_xG + EXP_xAG, 2) as total_expected_contributions
+            FROM `{self.project_id}.nwsl_fbref.player_stats_all_years`
+            WHERE Squad = '{normalized_team}' 
+                AND season = {int(season)} 
+                AND PT_Min >= {min_minutes}
+            ORDER BY {sort_column} DESC
+            """
+            
+            df = self.bigquery_client.query(query).to_dataframe()
+            
+            if df.empty:
+                return [types.TextContent(type="text", text=f"No players found for {team} in {season} with minimum {min_minutes} minutes played.")]
+            
+            result = f"{team} Roster Analysis ({season}):\n"
+            result += f"Players with {min_minutes}+ minutes (sorted by {sort_by}):\n\n"
+            
+            for _, player in df.iterrows():
+                conversion = player['goal_conversion_rate'] if pd.notna(player['goal_conversion_rate']) else 0.0
+                result += f"• {player['player_name']} ({player['position']}): "
+                result += f"{player['goals']}G + {player['assists']}A = {player['total_contributions']} contributions, "
+                result += f"{player['expected_goals']:.1f}xG + {player['expected_assists']:.1f}xA, "
+                result += f"{player['minutes_played']:.0f} mins, {conversion:.2f} conversion rate\n"
+            
+            result += f"\nTeam Totals: {df['goals'].sum()}G + {df['assists'].sum()}A, "
+            result += f"{df['expected_goals'].sum():.1f}xG + {df['expected_assists'].sum():.1f}xA"
+            
+            return [types.TextContent(type="text", text=result)]
+            
+        except Exception as e:
+            return [types.TextContent(type="text", text=f"Team roster analysis failed: {str(e)}")]
+    
     def _register_resources(self):
         """Register resources (datasets, schemas)"""
         
